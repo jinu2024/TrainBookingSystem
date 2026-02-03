@@ -1,6 +1,5 @@
-def main():
-    print("Hello from train-booking-system!")
+from cli import admin
 
 
 if __name__ == "__main__":
-    main()
+    admin()

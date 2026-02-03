@@ -63,4 +63,3 @@ python -m pytest -q
 - `ui/` — presentation helpers using Rich
 - `utils/` — small validators and helpers
 - `tests/` — pytest unit tests
-

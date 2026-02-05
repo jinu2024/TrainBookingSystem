@@ -4,16 +4,11 @@ Keep logic side-effect free where possible; database operations are delegated to
 `database/queries.py` via `database/connection.py`.
 """
 from __future__ import annotations
-
-import hashlib
 from typing import Optional
 
 from database import connection, queries
 from utils.validators import is_valid_email, is_strong_password
-
-
-def _hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+from utils.security import hash_password,verify_password
 
 
 def create_admin(username: str, email: str, password: str) -> dict:
@@ -37,8 +32,68 @@ def create_admin(username: str, email: str, password: str) -> dict:
         if queries.get_user_by_email(conn, email):
             raise ValueError("email already exists")
 
-        password_hash = _hash_password(password)
+        password_hash = hash_password(password)
         user_id = queries.create_user(conn, username, email, password_hash, role="admin")
         return {"id": user_id, "username": username}
+    finally:
+        connection.close_connection(conn)
+
+
+def authenticate_admin(username: str, password: str) -> dict:
+    """
+    Authenticate an admin user.
+    Returns user dict on success.
+    Raises ValueError on failure.
+    """
+    if not username or not password:
+        raise ValueError("username and password required")
+
+    conn = connection.get_connection()
+    try:
+        user = queries.get_user_by_username(conn, username)
+
+        if not user:
+            raise ValueError("Invalid username or password")
+
+        if user["role"] != "admin":
+            raise ValueError("Unauthorized access")
+
+        if user["status"] != "active":
+            raise ValueError("Admin account is inactive")
+
+        if not verify_password(password, user["password_hash"]):
+            raise ValueError("Invalid username or password")
+
+        return dict(user)
+
+    finally:
+        connection.close_connection(conn)
+
+
+def authenticate_customer(username: str, password: str) -> dict:
+    """
+    Authenticate a customer user.
+    """
+    if not username or not password:
+        raise ValueError("username and password required")
+
+    conn = connection.get_connection()
+    try:
+        user = queries.get_user_by_username(conn, username)
+
+        if not user:
+            raise ValueError("Invalid username or password")
+
+        if user["role"] != "customer":
+            raise ValueError("Unauthorized access")
+
+        if user["status"] != "active":
+            raise ValueError("Customer account is inactive")
+
+        if not verify_password(password, user["password_hash"]):
+            raise ValueError("Invalid username or password")
+
+        return dict(user)
+
     finally:
         connection.close_connection(conn)

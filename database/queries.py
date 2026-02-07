@@ -254,3 +254,25 @@ def delete_expired_sessions(conn, now_iso):
     cur = conn.cursor()
     cur.execute("DELETE FROM sessions WHERE expires_at <= ?", (now_iso,))
     conn.commit()
+
+
+# -------------------------
+# PASSENGERS (stored as JSON in users.passengers TEXT)
+# -------------------------
+def get_passengers_for_user(conn, user_id):
+    cur = conn.cursor()
+    cur.execute("SELECT passengers FROM users WHERE id = ?", (user_id,))
+    row = cur.fetchone()
+    if not row:
+        return None
+    # row may be sqlite3.Row -> allow dict-style or index
+    try:
+        return row["passengers"]
+    except Exception:
+        return row[0]
+
+
+def save_passengers_for_user(conn, user_id, passengers_json):
+    cur = conn.cursor()
+    cur.execute("UPDATE users SET passengers = ? WHERE id = ?", (passengers_json, user_id))
+    conn.commit()

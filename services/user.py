@@ -9,6 +9,7 @@ from typing import Optional
 from database import connection, queries
 from utils.validators import is_valid_email, is_strong_password
 from utils.security import hash_password,verify_password
+import json
 
 
 def create_admin(username: str, email: str, password: str, *, full_name: str | None = None, dob: str | None = None, gender: str | None = None, mobile: str | None = None, aadhaar: str | None = None, nationality: str | None = None, address: str | None = None, passengers: str | None = None) -> dict:
@@ -191,5 +192,95 @@ def authenticate_user(identifier: str, password: str) -> dict:
 
         return dict(user)
 
+    finally:
+        connection.close_connection(conn)
+
+
+### Passenger list helpers (JSON stored in users.passengers)
+def list_passengers(user_id: int) -> list:
+    """Return a list of passenger dicts for the given user.
+
+    If no passengers are stored, returns an empty list.
+    """
+    conn = connection.get_connection()
+    try:
+        raw = queries.get_passengers_for_user(conn, user_id)
+        if not raw:
+            return []
+        try:
+            return json.loads(raw)
+        except Exception:
+            # corrupted JSON -> return empty list to avoid crashes
+            return []
+    finally:
+        connection.close_connection(conn)
+
+
+def add_passenger(user_id: int, passenger: dict) -> list:
+    """Add a passenger (dict) to the user's passengers list and return updated list."""
+    conn = connection.get_connection()
+    try:
+        current = queries.get_passengers_for_user(conn, user_id)
+        if not current:
+            lst = []
+        else:
+            try:
+                lst = json.loads(current)
+            except Exception:
+                lst = []
+
+        lst.append(passenger)
+        queries.save_passengers_for_user(conn, user_id, json.dumps(lst))
+        return lst
+    finally:
+        connection.close_connection(conn)
+
+
+def update_passenger(user_id: int, index: int, passenger: dict) -> list:
+    """Update passenger at 0-based index. Returns updated list.
+
+    Raises IndexError if index is out of range.
+    """
+    conn = connection.get_connection()
+    try:
+        current = queries.get_passengers_for_user(conn, user_id)
+        if not current:
+            raise IndexError("no passengers to update")
+        try:
+            lst = json.loads(current)
+        except Exception:
+            raise IndexError("passenger list corrupted")
+
+        if index < 0 or index >= len(lst):
+            raise IndexError("passenger index out of range")
+
+        lst[index] = passenger
+        queries.save_passengers_for_user(conn, user_id, json.dumps(lst))
+        return lst
+    finally:
+        connection.close_connection(conn)
+
+
+def remove_passenger(user_id: int, index: int) -> list:
+    """Remove passenger at 0-based index. Returns updated list.
+
+    Raises IndexError if index is out of range.
+    """
+    conn = connection.get_connection()
+    try:
+        current = queries.get_passengers_for_user(conn, user_id)
+        if not current:
+            raise IndexError("no passengers to remove")
+        try:
+            lst = json.loads(current)
+        except Exception:
+            raise IndexError("passenger list corrupted")
+
+        if index < 0 or index >= len(lst):
+            raise IndexError("passenger index out of range")
+
+        lst.pop(index)
+        queries.save_passengers_for_user(conn, user_id, json.dumps(lst))
+        return lst
     finally:
         connection.close_connection(conn)

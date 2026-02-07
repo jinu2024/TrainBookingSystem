@@ -24,7 +24,31 @@ def passenger_dashboard(username: str, session_token: str | None = None) -> None
 
     while True:
         # show simple actions ; keep session active until Logout
-        choice = questionary.select("Passenger actions:", choices=["Logout"]).ask()
+        choice = questionary.select("Passenger actions:", choices=["Book Tickets", "View Booking History", "Edit Profile", "Manage passanger master list", "Close CLI", "Logout"]).ask()
+        if choice == "Manage passanger master list":
+            # find user id from username
+            try:
+                conn = None
+                # we need to locate the user record to get id
+                # reuse queries via connection module
+                from database import connection, queries
+
+                conn = connection.get_connection()
+                user = queries.get_user_by_username(conn, username)
+                if not user:
+                    messages.show_error("User not found")
+                else:
+                    # open passenger manager
+                    manage_passengers(user["id"])
+            except Exception as exc:
+                messages.show_error(f"Failed to manage passengers: {exc}")
+            finally:
+                try:
+                    if conn:
+                        connection.close_connection(conn)
+                except Exception:
+                    pass
+            continue
         if choice == "Logout":
             # invalidate session if present
             if session_token:
@@ -36,11 +60,6 @@ def passenger_dashboard(username: str, session_token: str | None = None) -> None
                     pass
             messages.show_info("Logged out")
             return
-
-
-if __name__ == "__main__":
-    # quick manual test
-    passenger_dashboard("demo_passenger")
 
 
 def register_customer(interactive: bool = True, username: str | None = None, email: str | None = None, password: str | None = None, full_name: str | None = None, dob: str | None = None, gender: str | None = None, mobile: str | None = None, aadhaar: str | None = None, nationality: str | None = None, address: str | None = None) -> dict:
@@ -78,8 +97,90 @@ def register_customer(interactive: bool = True, username: str | None = None, ema
             nationality=nationality,
             address=address,
         )
-        messages.show_success(f"Customer '{result['username']}' created (id={result['id']})")
+        messages.show_success(f"Welcome, '{result['username']}'. Your account has been created.")
         return result
     except Exception as exc:
         messages.show_error(str(exc))
         raise
+
+
+def manage_passengers(user_id: int) -> None:
+    """Interactive passenger list manager for a given user id."""
+    console = Console()
+    console.print(Panel("Manage Passengers", style="bold green", expand=False))
+
+    from services import user as user_service
+
+    while True:
+        choices = ["List passengers", "Add passenger", "Edit passenger", "Remove passenger", "Back"]
+        action = questionary.select("Passenger manager:", choices=choices).ask()
+        if action == "Back" or not action:
+            return
+
+        try:
+            if action == "List passengers":
+                lst = user_service.list_passengers(user_id)
+                if not lst:
+                    messages.show_info("No passengers saved yet.")
+                else:
+                    for idx, p in enumerate(lst, start=1):
+                        console.print(Panel(f"{idx}. {p.get('name','<no-name>')} — {p.get('dob','')}", title=str(idx)))
+
+            elif action == "Add passenger":
+                name = questionary.text("Name:").ask()
+                dob = questionary.text("Date of birth (YYYY-MM-DD):").ask()
+                gender = questionary.select("Gender:", choices=["male", "female", "other"]).ask()
+                aadhaar = questionary.text("Aadhaar (optional):").ask()
+                mobile = questionary.text("Mobile (optional):").ask()
+                passenger = {
+                    "name": name,
+                    "dob": dob,
+                    "gender": gender,
+                    "aadhaar": aadhaar,
+                    "mobile": mobile,
+                }
+                updated = user_service.add_passenger(user_id, passenger)
+                messages.show_success(f"Passenger added. Total now: {len(updated)}")
+
+            elif action == "Edit passenger":
+                lst = user_service.list_passengers(user_id)
+                if not lst:
+                    messages.show_info("No passengers to edit.")
+                    continue
+                choices_idx = [f"{i+1}. {p.get('name','<no-name>')}" for i, p in enumerate(lst)]
+                sel = questionary.select("Select passenger to edit:", choices=choices_idx).ask()
+                if not sel:
+                    continue
+                idx = int(sel.split(".")[0]) - 1
+                existing = lst[idx]
+                name = questionary.text("Name:", default=existing.get("name","")).ask()
+                dob = questionary.text("Date of birth (YYYY-MM-DD):", default=existing.get("dob","")).ask()
+                gender = questionary.select("Gender:", choices=["male", "female", "other"], default=existing.get("gender","male")).ask()
+                aadhaar = questionary.text("Aadhaar (optional):", default=existing.get("aadhaar","")).ask()
+                mobile = questionary.text("Mobile (optional):", default=existing.get("mobile","")).ask()
+                passenger = {"name": name, "dob": dob, "gender": gender, "aadhaar": aadhaar, "mobile": mobile}
+                updated = user_service.update_passenger(user_id, idx, passenger)
+                messages.show_success(f"Passenger updated. Total now: {len(updated)}")
+
+            elif action == "Remove passenger":
+                lst = user_service.list_passengers(user_id)
+                if not lst:
+                    messages.show_info("No passengers to remove.")
+                    continue
+                choices_idx = [f"{i+1}. {p.get('name','<no-name>')}" for i, p in enumerate(lst)]
+                sel = questionary.select("Select passenger to remove:", choices=choices_idx).ask()
+                if not sel:
+                    continue
+                idx = int(sel.split(".")[0]) - 1
+                updated = user_service.remove_passenger(user_id, idx)
+                messages.show_success(f"Passenger removed. Total now: {len(updated)}")
+
+        except IndexError as ie:
+            messages.show_error(str(ie))
+        except Exception as exc:
+            messages.show_error(f"Error: {exc}")
+
+
+if __name__ == "__main__":
+    # quick manual test
+    passenger_dashboard("demo_passenger")

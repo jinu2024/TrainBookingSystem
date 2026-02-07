@@ -55,3 +55,4 @@ def invalidate_session(token: str) -> None:
         queries.delete_session(conn, token)
     finally:
         connection.close_connection(conn)
+

@@ -256,6 +256,26 @@ def delete_expired_sessions(conn, now_iso):
     conn.commit()
 
 
+def get_active_session(conn, now_iso):
+    """Return the most recent active session (not expired) joined with user info.
+
+    Returns a row with token, user_id, expires_at, username, role or None.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT s.token, s.user_id, s.expires_at, u.username, u.role
+        FROM sessions s
+        JOIN users u ON s.user_id = u.id
+        WHERE s.expires_at > ?
+        ORDER BY s.created_at DESC
+        LIMIT 1
+        """,
+        (now_iso,),
+    )
+    return cur.fetchone()
+
+
 # -------------------------
 # PASSENGERS (stored as JSON in users.passengers TEXT)
 # -------------------------

@@ -10,11 +10,32 @@ from cli import admin as admin_cli
 from cli import passenger as passenger_cli
 from services import user as user_service
 
+from database import connection, queries
+from datetime import datetime, timezone
+
 console = Console()
 
 
 def main_menu() -> None:
 	console.print(Panel("Train Booking System", style="bold green", expand=False))
+
+	# Auto-login: if a valid (non-expired) customer session exists, open dashboard
+	try:
+		conn = connection.get_connection()
+		now_iso = datetime.now(timezone.utc).isoformat()
+		# cleanup expired sessions first
+		queries.delete_expired_sessions(conn, now_iso)
+		active = queries.get_active_session(conn, now_iso)
+		if active and active["role"] == "customer":
+			# active contains token, user_id, expires_at, username, role
+			messages.show_info(f"Auto-login detected: {active['username']}")
+			# open passenger dashboard with the existing token
+			passenger_cli.passenger_dashboard(active["username"], session_token=active["token"])
+	finally:
+		try:
+			connection.close_connection(conn)
+		except Exception:
+			pass
 
 	while True:
 		choice = questionary.select(

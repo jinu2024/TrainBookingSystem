@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime, timedelta, timezone
 
 from database import connection, queries
 
@@ -11,11 +10,13 @@ SESSION_TTL = timedelta(hours=24)
 
 
 def _now_iso() -> str:
-    return datetime.utcnow().isoformat()
+    # timezone-aware UTC ISO timestamp
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _expires_iso() -> str:
-    return (datetime.now(datetime.timezone.utc) + SESSION_TTL).isoformat()
+    # timezone-aware UTC ISO timestamp for expiry
+    return (datetime.now(timezone.utc) + SESSION_TTL).isoformat()
 
 
 def create_session_for_user(user_id: int) -> str:

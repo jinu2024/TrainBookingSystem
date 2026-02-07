@@ -36,7 +36,9 @@ def main(argv=None):
             return
 
         from cli.menu import main_menu
-
+        from database.queries import init_db
+        
+        init_db()
         main_menu()
     except Exception as exc:
         print("Error launching CLI:", exc)

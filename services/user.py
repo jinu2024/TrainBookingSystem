@@ -97,3 +97,33 @@ def authenticate_customer(username: str, password: str) -> dict:
 
     finally:
         connection.close_connection(conn)
+
+
+def authenticate_user(identifier: str, password: str) -> dict:
+    """Generic authenticate: identifier may be username or email.
+
+    Returns user dict on success. Raises ValueError on failure.
+    """
+    if not identifier or not password:
+        raise ValueError("identifier and password required")
+
+    conn = connection.get_connection()
+    try:
+        # try username first, then email
+        user = queries.get_user_by_username(conn, identifier)
+        if not user:
+            user = queries.get_user_by_email(conn, identifier)
+
+        if not user:
+            raise ValueError("Invalid credentials")
+
+        if user["status"] != "active":
+            raise ValueError("Account is inactive")
+
+        if not verify_password(password, user["password_hash"]):
+            raise ValueError("Invalid credentials")
+
+        return dict(user)
+
+    finally:
+        connection.close_connection(conn)

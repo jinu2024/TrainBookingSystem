@@ -41,3 +41,20 @@ if __name__ == "__main__":
         register_admin()
     except Exception:
         pass
+
+
+def admin_dashboard(username: str) -> None:
+    """Simple admin dashboard with logout option."""
+    from rich.console import Console
+    from rich.panel import Panel
+    import questionary
+
+    console = Console()
+    console.print(Panel(f"Admin Dashboard — {username}", style="bold magenta"))
+
+    # Simple loop until logout
+    while True:
+        choice = questionary.select("Admin actions:", choices=["Logout"]).ask()
+        if choice == "Logout":
+            messages.show_info("Logged out")
+            return

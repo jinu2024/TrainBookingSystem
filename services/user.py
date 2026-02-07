@@ -11,7 +11,7 @@ from utils.validators import is_valid_email, is_strong_password
 from utils.security import hash_password,verify_password
 
 
-def create_admin(username: str, email: str, password: str) -> dict:
+def create_admin(username: str, email: str, password: str, *, full_name: str | None = None, dob: str | None = None, gender: str | None = None, mobile: str | None = None, aadhaar: str | None = None, nationality: str | None = None, address: str | None = None, passengers: str | None = None) -> dict:
     """Create an admin user.
 
     Returns a dict with `id` and `username` on success.
@@ -33,33 +33,73 @@ def create_admin(username: str, email: str, password: str) -> dict:
             raise ValueError("email already exists")
 
         password_hash = hash_password(password)
-        user_id = queries.create_user(conn, username, email, password_hash, role="admin")
+        user_id = queries.create_user(
+            conn,
+            username,
+            email,
+            password_hash,
+            role="admin",
+            full_name=full_name,
+            dob=dob,
+            gender=gender,
+            mobile=mobile,
+            aadhaar=aadhaar,
+            nationality=nationality,
+            address=address,
+            passengers=passengers,
+        )
         return {"id": user_id, "username": username}
     finally:
         connection.close_connection(conn)
 
 
-def create_customer(username: str, email: str, password: str) -> dict:
+def create_customer(username: str, email: str | None, password: str, *, full_name: str | None = None, dob: str | None = None, gender: str | None = None, mobile: str | None = None, aadhaar: str | None = None, nationality: str | None = None, address: str | None = None, passengers: str | None = None) -> dict:
     """Create a customer user.
 
     Same validation rules as admin, but role is 'customer'.
     """
     if not username:
         raise ValueError("username required")
-    if not is_valid_email(email):
+    # email or mobile must be provided for customers
+    if not email and not mobile:
+        raise ValueError("email or mobile number is required")
+    if email and not is_valid_email(email):
         raise ValueError("invalid email")
     if not is_strong_password(password):
         raise ValueError("password must be at least 8 characters")
+    # require minimal profile fields for customers
+    if not full_name:
+        raise ValueError("full name is required for customer signup")
+    if not dob:
+        raise ValueError("date of birth (dob) is required for customer signup")
+    if not gender:
+        raise ValueError("gender is required for customer signup")
 
     conn = connection.get_connection()
     try:
         if queries.get_user_by_username(conn, username):
             raise ValueError("username already exists")
-        if queries.get_user_by_email(conn, email):
+        if email and queries.get_user_by_email(conn, email):
             raise ValueError("email already exists")
+        if mobile and queries.get_user_by_mobile(conn, mobile):
+            raise ValueError("mobile already exists")
 
         password_hash = hash_password(password)
-        user_id = queries.create_user(conn, username, email, password_hash, role="customer")
+        user_id = queries.create_user(
+            conn,
+            username,
+            email,
+            password_hash,
+            role="customer",
+            full_name=full_name,
+            dob=dob,
+            gender=gender,
+            mobile=mobile,
+            aadhaar=aadhaar,
+            nationality=nationality,
+            address=address,
+            passengers=passengers,
+        )
         return {"id": user_id, "username": username}
     finally:
         connection.close_connection(conn)

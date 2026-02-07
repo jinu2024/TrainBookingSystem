@@ -1,5 +1,6 @@
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from services import user as user_service
 
 from database import connection, queries
 from services import session as session_service
@@ -18,10 +19,9 @@ def test_create_and_validate_session(tmp_path):
     db_file = setup_temp_db(tmp_path)
 
     # create a user
-    conn = connection.get_connection()
-    pw = security.hash_password("custpass")
-    uid = queries.create_user(conn, "suser", "suser@example.com", pw, "customer")
-    conn.close()
+    # create a customer via service with required profile fields
+    res = user_service.create_customer("suser", "suser@example.com", "custpass", full_name="S User", dob="1990-01-01", gender="male")
+    uid = res["id"]
 
     token = session_service.create_session_for_user(uid)
     # validate
@@ -32,13 +32,13 @@ def test_create_and_validate_session(tmp_path):
 def test_session_expiry(tmp_path):
     db_file = setup_temp_db(tmp_path)
 
-    conn = connection.get_connection()
-    pw = security.hash_password("custpass")
-    uid = queries.create_user(conn, "suser2", "suser2@example.com", pw, "customer")
+    res = user_service.create_customer("suser2", "suser2@example.com", "custpass2", full_name="S User2", dob="1991-01-01", gender="female")
+    uid = res["id"]
 
     # insert expired session
-    expired = (datetime.utcnow() - timedelta(days=1)).isoformat()
+    expired = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
     token = "expiredtoken123"
+    conn = connection.get_connection()
     queries.create_session(conn, token, uid, expired)
     conn.close()
 

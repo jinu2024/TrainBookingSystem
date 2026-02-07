@@ -28,10 +28,15 @@ def test_authenticate_admin_success(tmp_path):
 def test_authenticate_customer_success(tmp_path):
     db_file = setup_temp_db(tmp_path)
 
-    conn = connection.get_connection()
-    pw = security.hash_password("custpass")
-    queries.create_user(conn, "cust1", "cust1@example.com", pw, "customer")
-    conn.close()
+    # create customer with required profile fields
+    user_service.create_customer(
+        "cust1",
+        "cust1@example.com",
+        "custpass",
+        full_name="Customer One",
+        dob="1995-05-05",
+        gender="male",
+    )
 
     u = user_service.authenticate_user("cust1", "custpass")
     assert u["username"] == "cust1"

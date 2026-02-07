@@ -10,6 +10,37 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Extended profile fields for customers (admins may optionally fill these)
+-- Note: some constraints (like email OR mobile required) are enforced at the
+-- application layer; DB columns are mostly nullable to allow flexibility.
+ALTER TABLE users RENAME TO users_old;
+
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    email TEXT,
+    mobile TEXT,
+    password_hash TEXT NOT NULL,
+    role TEXT CHECK(role IN ('admin', 'customer')) NOT NULL,
+    status TEXT CHECK(status IN ('active', 'inactive')) DEFAULT 'active',
+    full_name TEXT,
+    dob TEXT,
+    gender TEXT,
+    aadhaar TEXT,
+    nationality TEXT,
+    address TEXT,
+    passengers TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(email),
+    UNIQUE(mobile),
+    UNIQUE(aadhaar)
+);
+
+-- migrate old data if any (best-effort) and drop old table
+INSERT INTO users (id, username, email, password_hash, role, status, created_at)
+    SELECT id, username, email, password_hash, role, status, created_at FROM users_old;
+DROP TABLE users_old;
+
 -- STATIONS
 CREATE TABLE IF NOT EXISTS stations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

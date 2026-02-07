@@ -43,7 +43,7 @@ if __name__ == "__main__":
     passenger_dashboard("demo_passenger")
 
 
-def register_customer(interactive: bool = True, username: str | None = None, email: str | None = None, password: str | None = None) -> dict:
+def register_customer(interactive: bool = True, username: str | None = None, email: str | None = None, password: str | None = None, full_name: str | None = None, dob: str | None = None, gender: str | None = None, mobile: str | None = None, aadhaar: str | None = None, nationality: str | None = None, address: str | None = None) -> dict:
     """Register a new customer (passenger).
 
     Mirrors the admin registration flow but uses `create_customer` service.
@@ -53,13 +53,31 @@ def register_customer(interactive: bool = True, username: str | None = None, ema
 
     if interactive:
         username = questionary.text("Username:").ask()
-        email = questionary.text("Email:").ask()
+        full_name = questionary.text("Full name:").ask()
+        dob = questionary.text("Date of birth (YYYY-MM-DD):").ask()
+        gender = questionary.select("Gender:", choices=["male", "female", "other"]).ask()
+        email = questionary.text("Email (optional if mobile provided):").ask()
+        mobile = questionary.text("Mobile (optional if email provided):").ask()
+        aadhaar = questionary.text("Aadhaar number (optional):").ask()
+        nationality = questionary.text("Nationality (optional):").ask()
+        address = questionary.text("Address (optional):").ask()
         password = questionary.password("Password (min 8 chars):").ask()
 
     try:
         from services.user import create_customer
 
-        result = create_customer(username, email, password)
+        result = create_customer(
+            username,
+            email,
+            password,
+            full_name=full_name,
+            dob=dob,
+            gender=gender,
+            mobile=mobile,
+            aadhaar=aadhaar,
+            nationality=nationality,
+            address=address,
+        )
         messages.show_success(f"Customer '{result['username']}' created (id={result['id']})")
         return result
     except Exception as exc:

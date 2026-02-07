@@ -24,14 +24,44 @@ def init_db():
 
 # USER QUERIES
 
-def create_user(conn, username, email, password_hash, role):
+def create_user(
+    conn,
+    username,
+    email,
+    password_hash,
+    role,
+    full_name=None,
+    dob=None,
+    gender=None,
+    mobile=None,
+    aadhaar=None,
+    nationality=None,
+    address=None,
+    passengers=None,
+):
     cursor = conn.cursor()
     cursor.execute(
         """
-        INSERT INTO users (username, email, password_hash, role)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO users (
+            username, email, mobile, password_hash, role,
+            full_name, dob, gender, aadhaar, nationality, address, passengers
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (username, email, password_hash, role)
+        (
+            username,
+            email,
+            mobile,
+            password_hash,
+            role,
+            full_name,
+            dob,
+            gender,
+            aadhaar,
+            nationality,
+            address,
+            passengers,
+        ),
     )
     conn.commit()
     return cursor.lastrowid
@@ -51,6 +81,15 @@ def get_user_by_email(conn, email):
     cursor.execute(
         "SELECT * FROM users WHERE email = ?",
         (email,)
+    )
+    return cursor.fetchone()
+
+
+def get_user_by_mobile(conn, mobile):
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM users WHERE mobile = ?",
+        (mobile,)
     )
     return cursor.fetchone()
 

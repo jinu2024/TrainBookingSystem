@@ -49,8 +49,14 @@ def test_create_admin_invalid_password(tmp_path):
 
 def test_create_customer_success(tmp_path):
     db_file = setup_temp_db(tmp_path)
-
-    res = user_service.create_customer("custalice", "custalice@example.com", "custstrong")
+    res = user_service.create_customer(
+        "custalice",
+        "custalice@example.com",
+        "custstrong",
+        full_name="Cust Alice",
+        dob="1990-01-01",
+        gender="female",
+    )
     assert res["username"] == "custalice"
 
     # verify row exists

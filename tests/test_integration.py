@@ -1,7 +1,7 @@
 import sys
 import sqlite3
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -98,7 +98,14 @@ def test_customer_session_expiry_across_rerun(tmp_path, monkeypatch):
     setup_temp_db(tmp_path)
 
     # create customer
-    res = user_service.create_customer("int_cust", "int_cust@example.com", "custpass123")
+    res = user_service.create_customer(
+        "int_cust",
+        "int_cust@example.com",
+        "custpass123",
+        full_name="Integration Cust",
+        dob="1992-02-02",
+        gender="other",
+    )
     # create session
     conn = sqlite3.connect(connection.DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -111,7 +118,7 @@ def test_customer_session_expiry_across_rerun(tmp_path, monkeypatch):
     token = session_service.create_session_for_user(uid)
 
     # expire the session by updating expires_at to the past
-    past = (datetime.utcnow() - timedelta(days=1)).isoformat()
+    past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
     cur.execute("UPDATE sessions SET expires_at = ? WHERE token = ?", (past, token))
     conn.commit()
     conn.close()

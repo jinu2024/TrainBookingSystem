@@ -24,8 +24,32 @@ def passenger_dashboard(username: str, session_token: str | None = None) -> None
 
     while True:
         # show simple actions ; keep session active until Logout
-        choice = questionary.select("Passenger actions:", choices=["Book Tickets", "View Booking History", "Edit Profile", "Manage passanger master list", "Close CLI", "Logout"]).ask()
-        if choice == "Manage passanger master list":
+        choice = questionary.select(
+            "Passenger actions:",
+            choices=[
+                "Book Tickets",
+                "View Booking History",
+                "Edit Profile",
+                "Manage passenger master list",
+                "Help",
+                "Close CLI",
+                "Logout",
+            ],
+        ).ask()
+
+        if choice == "Book Tickets":
+            book_tickets_dashboard(username)
+            continue
+
+        if choice == "View Booking History":
+            booking_history_dashboard(username)
+            continue
+
+        if choice == "Edit Profile":
+            profile_dashboard(username)
+            continue
+
+        if choice == "Manage passenger master list":
             # find user id from username
             try:
                 conn = None
@@ -60,6 +84,14 @@ def passenger_dashboard(username: str, session_token: str | None = None) -> None
                     pass
             messages.show_info("Logged out")
             return
+
+        if choice == "Help":
+            help_dashboard(username)
+            continue
+
+        if choice == "Close CLI":
+            messages.show_info("Closing CLI — goodbye")
+            raise SystemExit(0)
 
 
 def register_customer(interactive: bool = True, username: str | None = None, email: str | None = None, password: str | None = None, full_name: str | None = None, dob: str | None = None, gender: str | None = None, mobile: str | None = None, aadhaar: str | None = None, nationality: str | None = None, address: str | None = None) -> dict:
@@ -179,6 +211,32 @@ def manage_passengers(user_id: int) -> None:
             messages.show_error(str(ie))
         except Exception as exc:
             messages.show_error(f"Error: {exc}")
+
+
+def book_tickets_dashboard(username: str) -> None:
+    console = Console()
+    console.print(Panel(f"Book Tickets — {username}", style="bold magenta"))
+    messages.show_info("Booking UI not implemented yet.")
+
+
+def booking_history_dashboard(username: str) -> None:
+    console = Console()
+    console.print(Panel(f"Booking History — {username}", style="bold magenta"))
+    messages.show_info("Booking history not implemented yet.")
+
+
+def profile_dashboard(username: str) -> None:
+    console = Console()
+    console.print(Panel(f"Profile — {username}", style="bold magenta"))
+    messages.show_info("Profile editing not implemented yet.")
+
+
+def help_dashboard(username: str) -> None:
+    console = Console()
+    console.print(Panel("Passenger Help", style="bold yellow"))
+    messages.show_info("Help is not available yet.")
+
+
 
 
 if __name__ == "__main__":

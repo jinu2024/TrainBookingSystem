@@ -53,7 +53,11 @@ def signup_menu() -> None:
 			# register_admin already shows errors via ui.messages
 			pass
 	elif choice == "Passenger":
-		messages.show_info("Passenger sign up not implemented yet.")
+		try:
+			passenger_cli.register_customer()
+		except Exception:
+			# register_customer already shows errors via ui.messages
+			pass
 	elif choice == "Back":
 		return
 

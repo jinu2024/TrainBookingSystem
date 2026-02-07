@@ -39,6 +39,32 @@ def create_admin(username: str, email: str, password: str) -> dict:
         connection.close_connection(conn)
 
 
+def create_customer(username: str, email: str, password: str) -> dict:
+    """Create a customer user.
+
+    Same validation rules as admin, but role is 'customer'.
+    """
+    if not username:
+        raise ValueError("username required")
+    if not is_valid_email(email):
+        raise ValueError("invalid email")
+    if not is_strong_password(password):
+        raise ValueError("password must be at least 8 characters")
+
+    conn = connection.get_connection()
+    try:
+        if queries.get_user_by_username(conn, username):
+            raise ValueError("username already exists")
+        if queries.get_user_by_email(conn, email):
+            raise ValueError("email already exists")
+
+        password_hash = hash_password(password)
+        user_id = queries.create_user(conn, username, email, password_hash, role="customer")
+        return {"id": user_id, "username": username}
+    finally:
+        connection.close_connection(conn)
+
+
 def authenticate_admin(username: str, password: str) -> dict:
     """
     Authenticate an admin user.

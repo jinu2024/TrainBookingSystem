@@ -34,7 +34,10 @@ def main_menu() -> None:
 				if role == "admin":
 					admin_cli.admin_dashboard(user.get("username"))
 				else:
-					passenger_cli.passenger_dashboard(user.get("username"))
+					# create a session for customers (24h TTL) and pass token to dashboard
+					from services import session as session_service
+					token = session_service.create_session_for_user(user.get("id"))
+					passenger_cli.passenger_dashboard(user.get("username"), session_token=token)
 			except Exception as exc:
 				messages.show_error(str(exc))
 		elif choice == "About":

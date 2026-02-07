@@ -7,14 +7,33 @@ from rich.panel import Panel
 from ui import messages
 
 
-def passenger_dashboard(username: str) -> None:
+def passenger_dashboard(username: str, session_token: str | None = None) -> None:
     """Simple passenger dashboard with logout option."""
     console = Console()
     console.print(Panel(f"Passenger Dashboard — {username}", style="bold blue"))
 
+    # check session validity if provided
+    if session_token:
+        try:
+            from services import session as session_service
+
+            session_service.validate_session(session_token)
+        except Exception:
+            messages.show_error("Session expired or invalid. Logged out.")
+            return
+
     while True:
+        # show simple actions ; keep session active until Logout
         choice = questionary.select("Passenger actions:", choices=["Logout"]).ask()
         if choice == "Logout":
+            # invalidate session if present
+            if session_token:
+                from services import session as session_service
+
+                try:
+                    session_service.invalidate_session(session_token)
+                except Exception:
+                    pass
             messages.show_info("Logged out")
             return
 

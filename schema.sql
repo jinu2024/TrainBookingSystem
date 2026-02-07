@@ -64,3 +64,12 @@ CREATE TABLE IF NOT EXISTS bookings (
     FOREIGN KEY (destination_station_id) REFERENCES stations(id)
 );
 
+-- SESSIONS
+CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+

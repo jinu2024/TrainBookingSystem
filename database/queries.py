@@ -181,3 +181,37 @@ def find_schedules(conn, origin_id, destination_id, travel_date):
         (origin_id, destination_id, travel_date),
     )
     return cur.fetchall()
+
+
+# -------------------------
+# SESSION QUERIES
+# -------------------------
+
+def create_session(conn, token, user_id, expires_at):
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO sessions (token, user_id, expires_at)
+        VALUES (?, ?, ?)
+        """,
+        (token, user_id, expires_at),
+    )
+    conn.commit()
+
+
+def get_session(conn, token):
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM sessions WHERE token = ?", (token,))
+    return cur.fetchone()
+
+
+def delete_session(conn, token):
+    cur = conn.cursor()
+    cur.execute("DELETE FROM sessions WHERE token = ?", (token,))
+    conn.commit()
+
+
+def delete_expired_sessions(conn, now_iso):
+    cur = conn.cursor()
+    cur.execute("DELETE FROM sessions WHERE expires_at <= ?", (now_iso,))
+    conn.commit()

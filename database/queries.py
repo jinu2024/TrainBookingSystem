@@ -5,6 +5,7 @@ from pathlib import Path
 
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schema.sql"
 
+
 def init_db():
     try:
         conn = get_connection()
@@ -21,8 +22,8 @@ def init_db():
         print("❌ Database initialization failed:", e)
 
 
-
 # USER QUERIES
+
 
 def create_user(
     conn,
@@ -69,34 +70,26 @@ def create_user(
 
 def get_user_by_username(conn, username):
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT * FROM users WHERE username = ?",
-        (username,)
-    )
+    cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
     return cursor.fetchone()
 
 
 def get_user_by_email(conn, email):
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT * FROM users WHERE email = ?",
-        (email,)
-    )
+    cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
     return cursor.fetchone()
 
 
 def get_user_by_mobile(conn, mobile):
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT * FROM users WHERE mobile = ?",
-        (mobile,)
-    )
+    cursor.execute("SELECT * FROM users WHERE mobile = ?", (mobile,))
     return cursor.fetchone()
 
 
 # -------------------------
 # STATION QUERIES
 # -------------------------
+
 
 def create_station(conn, code, name, city):
     cur = conn.cursor()
@@ -125,9 +118,11 @@ def get_all_stations(conn):
     cur.execute("SELECT * FROM stations")
     return cur.fetchall()
 
+
 # -------------------------
 # TRAIN QUERIES
 # -------------------------
+
 
 def create_train(conn, train_number, train_name):
     cur = conn.cursor()
@@ -140,6 +135,22 @@ def create_train(conn, train_number, train_name):
     )
     conn.commit()
     return cur.lastrowid
+
+
+def update_train_name(conn, train_id, new_train_name):
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE trains SET train_name = ? WHERE id = ?", (new_train_name, train_id)
+    )
+    conn.commit()
+
+def update_station_name(conn, station_id, new_station_name):
+    cur = conn.cursor()
+    # update the station name (not the code)
+    cur.execute(
+        "UPDATE stations SET name = ? WHERE id = ?", (new_station_name, station_id)
+    )
+    conn.commit()
 
 
 def get_train_by_number(conn, train_number):
@@ -169,6 +180,7 @@ def delete_train(conn, train_id):
 # -------------------------
 # SCHEDULE QUERIES
 # -------------------------
+
 
 def create_schedule(
     conn,
@@ -225,6 +237,7 @@ def find_schedules(conn, origin_id, destination_id, travel_date):
 # -------------------------
 # SESSION QUERIES
 # -------------------------
+
 
 def create_session(conn, token, user_id, expires_at):
     cur = conn.cursor()
@@ -294,5 +307,7 @@ def get_passengers_for_user(conn, user_id):
 
 def save_passengers_for_user(conn, user_id, passengers_json):
     cur = conn.cursor()
-    cur.execute("UPDATE users SET passengers = ? WHERE id = ?", (passengers_json, user_id))
+    cur.execute(
+        "UPDATE users SET passengers = ? WHERE id = ?", (passengers_json, user_id)
+    )
     conn.commit()

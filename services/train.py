@@ -20,9 +20,7 @@ def update_train(train_id: int, new_name: str) -> None:
     """Update train name by id."""
     conn = connection.get_connection()
     try:
-        cur = conn.cursor()
-        cur.execute("UPDATE trains SET train_name = ? WHERE id = ?", (new_name, train_id))
-        conn.commit()
+        queries.update_train_name(conn, train_id, new_name)
     finally:
         connection.close_connection(conn)
 

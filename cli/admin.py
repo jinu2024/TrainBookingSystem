@@ -55,25 +55,41 @@ def admin_dashboard(username: str) -> None:
         choice = questionary.select(
             "Select admin action:",
             choices=[
-                "Admin Train Registration",
-                "Train Details Update",
+                "Add new Train",
+                "Add new Station",
+                "Schedule new Train Jouney",
+                "Update exisitng Train",
+                "Update existing Station",
                 "Delete Train",
                 "View All Trains",
+                "View All Stations",
                 "Logout",
             ],
         ).ask()
 
-        if choice == "Admin Train Registration":
+        if choice == "Add new Train":
             admin_train_registration()
             continue
-        if choice == "Train Details Update":
+        if choice == "Add new Station":
+            admin_add_station()
+            continue
+        if choice == "Schedule new Train Jouney":
+            admin_schedule_new_train_jouney()
+            continue
+        if choice == "Update exisitng Train":
             train_details_update()
+            continue
+        if choice == "Update existing Station":
+            station_details_update()
             continue
         if choice == "Delete Train":
             delete_train_by_admin()
             continue
         if choice == "View All Trains":
             admin_view_all_trains()
+            continue
+        if choice == "View All Stations":
+            admin_view_all_stations()
             continue
         if choice == "Logout":
             messages.show_info("Logged out")
@@ -85,7 +101,7 @@ def admin_dashboard(username: str) -> None:
 
 def admin_train_registration() -> None:
     console.print("[cyan] Admin Train Registration[/cyan]")
-    train_number = questionary.text("Train Number:").ask()
+    train_number = questionary.text("Train Number (6 char):").ask()
     train_name = questionary.text("Train Name:").ask()
 
     try:
@@ -95,9 +111,29 @@ def admin_train_registration() -> None:
         console.print(f"[bold red] Error registering train: {e}[/bold red]")
 
 
+def admin_add_station() -> None:
+    console.print("[cyan] Add Station[/cyan]")
+    code = questionary.text("Station code (6 char):").ask()
+    name = questionary.text("Station name:").ask()
+    city = questionary.text("City:").ask()
+
+    try:
+        # import station service lazily to avoid circular imports
+        from services import station as station_service
+
+        station_service.add_station(code, name, city)
+        console.print("[bold green] Station added successfully[/bold green]")
+    except Exception as e:
+        console.print(f"[bold red] Error adding station: {e}[/bold red]")
+
+
+def admin_schedule_new_train_jouney() -> None:
+    pass
+
+
 def train_details_update() -> None:
     console.print("[cyan] Update Train Details[/cyan]")
-    train_id = questionary.text("Enter Train ID to update:").ask()
+    train_id = questionary.text("Enter Train number to update:").ask()
     new_name = questionary.text("New Train Name:").ask()
 
     try:
@@ -105,6 +141,20 @@ def train_details_update() -> None:
         console.print("[bold green] Train Updated Successfully[/bold green]")
     except Exception as e:
         console.print(f"[bold red] Error updating train: {e}[/bold red]")
+
+
+def station_details_update() -> None:
+    console.print("[cyan] Update Station Details[/cyan]")
+    station_id: int = questionary.text("Enter Station number to update:").ask()
+    new_name: str = questionary.text("New Station Name:").ask()
+
+    try:
+        from services import station as station_service
+
+        station_service.update_station(station_id, new_name)
+        console.print("[bold green] Station Updated Successfully[/bold green]")
+    except Exception as e:
+        console.print(f"[bold red] Error updating Station details: {e}[/bold red]")
 
 
 def delete_train_by_admin() -> None:
@@ -127,6 +177,24 @@ def admin_view_all_trains() -> None:
 
     for row in rows:
         console.print(row)
+
+
+def admin_view_all_stations() -> None:
+    console.print("[cyan] All Trains[/cyan]")
+    try:
+        # import station service lazily to avoid circular imports
+        from services import station as station_service
+
+        rows = station_service.list_stations()
+
+        if not rows:
+            console.print("[yellow]No trains found[/yellow]")
+            return
+
+        for row in rows:
+            console.print(row)
+    except Exception as e:
+        console.print(f"[bold red] Error Viewing Stations: {e}[/bold red]")
 
 
 if __name__ == "__main__":

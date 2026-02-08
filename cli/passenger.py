@@ -7,6 +7,49 @@ from rich.panel import Panel
 from ui import messages
 
 
+def register_customer(interactive: bool = True, username: str | None = None, email: str | None = None, password: str | None = None, full_name: str | None = None, dob: str | None = None, gender: str | None = None, mobile: str | None = None, aadhaar: str | None = None, nationality: str | None = None, address: str | None = None) -> dict:
+    """Register a new customer (passenger).
+
+    Mirrors the admin registration flow but uses `create_customer` service.
+    """
+    console = Console()
+    console.print(Panel("Passenger Registration", style="bold blue", expand=False))
+
+    if interactive:
+        username = questionary.text("Username:").ask()
+        full_name = questionary.text("Full name:").ask()
+        dob = questionary.text("Date of birth (YYYY-MM-DD):").ask()
+        gender = questionary.select("Gender:", choices=["male", "female", "other"]).ask()
+        email = questionary.text("Email (optional if mobile provided):").ask()
+        mobile = questionary.text("Mobile (optional if email provided):").ask()
+        aadhaar = questionary.text("Aadhaar number (optional):").ask()
+        nationality = questionary.text("Nationality (optional):").ask()
+        address = questionary.text("Address (optional):").ask()
+        password = questionary.password("Password (min 8 chars):").ask()
+
+    try:
+        from services.user import create_customer
+
+        result = create_customer(
+            username,
+            email,
+            password,
+            full_name=full_name,
+            dob=dob,
+            gender=gender,
+            mobile=mobile,
+            aadhaar=aadhaar,
+            nationality=nationality,
+            address=address,
+        )
+        messages.show_success(f"Welcome, '{result['username']}'. Your account has been created.")
+        return result
+    except Exception as exc:
+        messages.show_error(str(exc))
+        raise
+
+
+
 def passenger_dashboard(username: str, session_token: str | None = None) -> None:
     """Simple passenger dashboard with logout option."""
     console = Console()
@@ -92,48 +135,6 @@ def passenger_dashboard(username: str, session_token: str | None = None) -> None
         if choice == "Close CLI":
             messages.show_info("Closing CLI — goodbye")
             raise SystemExit(0)
-
-
-def register_customer(interactive: bool = True, username: str | None = None, email: str | None = None, password: str | None = None, full_name: str | None = None, dob: str | None = None, gender: str | None = None, mobile: str | None = None, aadhaar: str | None = None, nationality: str | None = None, address: str | None = None) -> dict:
-    """Register a new customer (passenger).
-
-    Mirrors the admin registration flow but uses `create_customer` service.
-    """
-    console = Console()
-    console.print(Panel("Passenger Registration", style="bold blue", expand=False))
-
-    if interactive:
-        username = questionary.text("Username:").ask()
-        full_name = questionary.text("Full name:").ask()
-        dob = questionary.text("Date of birth (YYYY-MM-DD):").ask()
-        gender = questionary.select("Gender:", choices=["male", "female", "other"]).ask()
-        email = questionary.text("Email (optional if mobile provided):").ask()
-        mobile = questionary.text("Mobile (optional if email provided):").ask()
-        aadhaar = questionary.text("Aadhaar number (optional):").ask()
-        nationality = questionary.text("Nationality (optional):").ask()
-        address = questionary.text("Address (optional):").ask()
-        password = questionary.password("Password (min 8 chars):").ask()
-
-    try:
-        from services.user import create_customer
-
-        result = create_customer(
-            username,
-            email,
-            password,
-            full_name=full_name,
-            dob=dob,
-            gender=gender,
-            mobile=mobile,
-            aadhaar=aadhaar,
-            nationality=nationality,
-            address=address,
-        )
-        messages.show_success(f"Welcome, '{result['username']}'. Your account has been created.")
-        return result
-    except Exception as exc:
-        messages.show_error(str(exc))
-        raise
 
 
 def manage_passengers(user_id: int) -> None:

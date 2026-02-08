@@ -25,7 +25,7 @@ def main(argv=None):
         from rich.panel import Panel
 
         console = Console()
-        console.print(Panel("Launching TrainBookingSystem interactive CLI", style="bold green"))
+        console.print(Panel("Launching Train Booking System interactive CLI", style="bold green"))
 
         # If stdin is not a TTY (non-interactive environment), show a simple
         # textual fallback so the main menu is still visible in logs.

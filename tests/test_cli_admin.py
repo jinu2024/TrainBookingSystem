@@ -27,7 +27,7 @@ def test_admin_register_train_and_view(tmp_path, monkeypatch):
     setup_temp_db(tmp_path)
 
     # monkeypatch questionary.text to provide train number and name
-    seq = ["700Z", "Test Line"]
+    seq = ["700Z00", "Test Line"]
 
     def fake_text(prompt):
         return Dummy(seq.pop(0))
@@ -40,7 +40,7 @@ def test_admin_register_train_and_view(tmp_path, monkeypatch):
     # verify train exists
     conn = sqlite3.connect(connection.DB_PATH)
     conn.row_factory = sqlite3.Row
-    row = queries.get_train_by_number(conn, "700Z")
+    row = queries.get_train_by_number(conn, "700Z00")
     assert row is not None
     assert row["train_name"] == "Test Line"
     conn.close()

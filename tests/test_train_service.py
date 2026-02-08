@@ -15,18 +15,18 @@ def setup_temp_db(tmp_path):
 def test_add_and_list_trains(tmp_path):
     setup_temp_db(tmp_path)
 
-    tid = train_service.add_train("100A", "Morning Express")
+    tid = train_service.add_train("100A00", "Morning Express")
     assert isinstance(tid, int)
 
     rows = train_service.list_trains()
-    assert any(r["train_number"] == "100A" for r in rows)
+    assert any(r["train_number"] == "100A00" for r in rows)
 
 
 def test_add_duplicate_train_number(tmp_path):
     setup_temp_db(tmp_path)
-    train_service.add_train("200B", "Night Rider")
+    train_service.add_train("200B00", "Night Rider")
     try:
-        train_service.add_train("200B", "Duplicate")
+        train_service.add_train("200B00", "Duplicate")
         assert False, "expected ValueError for duplicate train number"
     except ValueError:
         pass
@@ -34,7 +34,7 @@ def test_add_duplicate_train_number(tmp_path):
 
 def test_update_and_remove_train(tmp_path):
     setup_temp_db(tmp_path)
-    tid = train_service.add_train("300C", "Regional")
+    tid = train_service.add_train("300C00", "Regional")
 
     # update name
     train_service.update_train(tid, "Regional Updated")

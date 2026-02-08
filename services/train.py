@@ -6,6 +6,9 @@ def add_train(train_number: str, train_name: str) -> int:
 
     Raises ValueError if the train number already exists.
     """
+    # validate train number format (6 chars expected)
+    if not isinstance(train_number, str) or len(train_number) != 6:
+        raise ValueError("train_number must be a 6-character string")
     conn = connection.get_connection()
     try:
         if queries.get_train_by_number(conn, train_number):

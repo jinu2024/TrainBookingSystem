@@ -128,7 +128,114 @@ def admin_add_station() -> None:
 
 
 def admin_schedule_new_train_jouney() -> None:
-    pass
+    console.print("[cyan] Schedule New Train Journey[/cyan]")
+
+    # list trains
+    rows = train_service.list_trains()
+    if not rows:
+        console.print("[yellow]No trains available to schedule[/yellow]")
+        return
+
+    train_map = {}
+    train_choices = []
+    for r in rows:
+        # r may be sqlite3.Row or tuple
+        try:
+            tid = r["id"]
+            tnum = r["train_number"]
+            tname = r["train_name"]
+        except Exception:
+            tid = r[0]
+            tnum = r[1]
+            tname = r[2]
+
+        display = f"{tid} - {tnum} - {tname}"
+        train_map[display] = tid
+        train_choices.append(display)
+
+    train_choice = questionary.select("Select train:", choices=train_choices).ask()
+    if not train_choice:
+        console.print("[yellow]Operation cancelled[/yellow]")
+        return
+    train_id = int(train_map[train_choice])
+
+    # list stations
+    try:
+        from services import station as station_service
+
+        stations = station_service.list_stations()
+    except Exception as e:
+        console.print(f"[bold red] Error fetching stations: {e}[/bold red]")
+        return
+
+    if not stations:
+        console.print("[yellow]No stations available. Add stations first.[/yellow]")
+        return
+
+    station_map = {}
+    station_choices = []
+    for s in stations:
+        try:
+            sid = s["id"]
+            scode = s["code"]
+            sname = s["name"]
+        except Exception:
+            sid = s[0]
+            scode = s[1]
+            sname = s[2]
+
+        display = f"{sid} - {scode} - {sname}"
+        station_map[display] = sid
+        station_choices.append(display)
+
+    origin_choice = questionary.select("Select origin station:", choices=station_choices).ask()
+    if not origin_choice:
+        console.print("[yellow]Operation cancelled[/yellow]")
+        return
+    origin_id = int(station_map[origin_choice])
+
+    # choose destination (prevent same as origin)
+    dest_choices = [c for c in station_choices if c != origin_choice]
+    if not dest_choices:
+        console.print("[yellow]Need at least two stations to schedule a journey[/yellow]")
+        return
+
+    dest_choice = questionary.select("Select destination station:", choices=dest_choices).ask()
+    if not dest_choice:
+        console.print("[yellow]Operation cancelled[/yellow]")
+        return
+    dest_id = int(station_map[dest_choice])
+
+    # times and date
+    travel_date = questionary.text("Travel date (YYYY-MM-DD):").ask()
+    departure_time = questionary.text("Departure time (HH:MM):").ask()
+    arrival_time = questionary.text("Arrival time (HH:MM):").ask()
+
+    # validate simple formats
+    from datetime import datetime
+
+    try:
+        datetime.strptime(travel_date, "%Y-%m-%d")
+        datetime.strptime(departure_time, "%H:%M")
+        datetime.strptime(arrival_time, "%H:%M")
+    except Exception:
+        console.print("[bold red]Invalid date/time format. Use YYYY-MM-DD and HH:MM[/bold red]")
+        return
+
+    try:
+        from services import schedule as schedule_service
+
+        sched_id = schedule_service.create_schedule(
+            train_id,
+            origin_id,
+            dest_id,
+            travel_date,
+            departure_time,
+            arrival_time,
+        )
+        console.print(f"[bold green]Schedule created (id={sched_id})[/bold green]")
+    except Exception as e:
+        console.print(f"[bold red] Error creating schedule: {e}[/bold red]")
 
 
 def train_details_update() -> None:

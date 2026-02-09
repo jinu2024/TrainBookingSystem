@@ -51,3 +51,12 @@ def create_schedule(
         )
     finally:
         connection.close_connection(conn)
+
+
+def list_schedules() -> list:
+    """Return all schedules as a list of rows."""
+    conn = connection.get_connection()
+    try:
+        return queries.get_all_schedules(conn)
+    finally:
+        connection.close_connection(conn)

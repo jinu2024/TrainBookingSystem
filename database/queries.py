@@ -144,6 +144,7 @@ def update_train_name(conn, train_id, new_train_name):
     )
     conn.commit()
 
+
 def update_station_name(conn, station_id, new_station_name):
     cur = conn.cursor()
     # update the station name (not the code)
@@ -230,6 +231,16 @@ def find_schedules(conn, origin_id, destination_id, travel_date):
           AND t.status = 'active'
         """,
         (origin_id, destination_id, travel_date),
+    )
+    return cur.fetchall()
+
+
+def get_all_schedules(conn):
+    cur = conn.cursor()
+    cur.excute(
+        """
+        SELECT * from schedules
+        """
     )
     return cur.fetchall()
 

@@ -91,6 +91,9 @@ def admin_dashboard(username: str) -> None:
         if choice == "View All Stations":
             admin_view_all_stations()
             continue
+        if choice == "View All Train Jouneys":
+            admin_view_all_train_jouneys()
+            continue
         if choice == "Logout":
             messages.show_info("Logged out")
             return
@@ -188,7 +191,9 @@ def admin_schedule_new_train_jouney() -> None:
         station_map[display] = sid
         station_choices.append(display)
 
-    origin_choice = questionary.select("Select origin station:", choices=station_choices).ask()
+    origin_choice = questionary.select(
+        "Select origin station:", choices=station_choices
+    ).ask()
     if not origin_choice:
         console.print("[yellow]Operation cancelled[/yellow]")
         return
@@ -197,10 +202,14 @@ def admin_schedule_new_train_jouney() -> None:
     # choose destination (prevent same as origin)
     dest_choices = [c for c in station_choices if c != origin_choice]
     if not dest_choices:
-        console.print("[yellow]Need at least two stations to schedule a journey[/yellow]")
+        console.print(
+            "[yellow]Need at least two stations to schedule a journey[/yellow]"
+        )
         return
 
-    dest_choice = questionary.select("Select destination station:", choices=dest_choices).ask()
+    dest_choice = questionary.select(
+        "Select destination station:", choices=dest_choices
+    ).ask()
     if not dest_choice:
         console.print("[yellow]Operation cancelled[/yellow]")
         return
@@ -219,7 +228,9 @@ def admin_schedule_new_train_jouney() -> None:
         datetime.strptime(departure_time, "%H:%M")
         datetime.strptime(arrival_time, "%H:%M")
     except Exception:
-        console.print("[bold red]Invalid date/time format. Use YYYY-MM-DD and HH:MM[/bold red]")
+        console.print(
+            "[bold red]Invalid date/time format. Use YYYY-MM-DD and HH:MM[/bold red]"
+        )
         return
 
     try:
@@ -302,6 +313,23 @@ def admin_view_all_stations() -> None:
             console.print(row)
     except Exception as e:
         console.print(f"[bold red] Error Viewing Stations: {e}[/bold red]")
+
+
+def admin_view_all_train_jouneys() -> None:
+    console.print("[cyan] All Train Journeys[/cyan]")
+    try:
+        from services import schedule as schedule_service
+
+        rows = schedule_service.list_schedules()
+
+        if not rows:
+            console.print("[yellow]No train journeys found[/yellow]")
+            return
+
+        for row in rows:
+            console.print(row)
+    except Exception as e:
+        console.print(f"[bold red] Error Viewing Train Journeys: {e}[/bold red]")
 
 
 if __name__ == "__main__":

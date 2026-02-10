@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections import defaultdict
 import sys
 
 import questionary
@@ -67,6 +68,7 @@ def admin_dashboard(username: str) -> None:
                 "View All Trains",
                 "View All Stations",
                 "View All Train Jouneys",
+                "View Train Route by Train",
                 "Logout",
             ],
         ).ask()
@@ -87,7 +89,7 @@ def admin_dashboard(username: str) -> None:
             station_details_update()
             continue
         if choice == "Update existing Train Journey":
-            train_journey_details_update
+            train_journey_details_update()
             continue
         if choice == "Delete Train":
             delete_train_by_admin()
@@ -100,6 +102,9 @@ def admin_dashboard(username: str) -> None:
             continue
         if choice == "View All Train Jouneys":
             admin_view_all_train_jouneys()
+            continue
+        if choice == "View Train Route by Train":
+            admin_view_train_route_by_train()
             continue
         if choice == "Logout":
             messages.show_info("Logged out")
@@ -140,7 +145,7 @@ def admin_add_station() -> None:
 def admin_schedule_new_train_jouney() -> None:
     console.print("[cyan] Schedule New Train Journey[/cyan]")
 
-    # list trains
+    # ================= TRAINS =================
     rows = train_service.list_trains()
     if not rows:
         console.print("[yellow]No trains available to schedule[/yellow]")
@@ -148,86 +153,94 @@ def admin_schedule_new_train_jouney() -> None:
 
     train_map = {}
     train_choices = []
-    for r in rows:
-        # r may be sqlite3.Row or tuple
-        try:
-            tid = r["id"]
-            tnum = r["train_number"]
-            tname = r["train_name"]
-        except Exception:
-            tid = r[0]
-            tnum = r[1]
-            tname = r[2]
 
-        display = f"{tid} - {tnum} - {tname}"
+    for r in rows:
+        tid = r["id"]
+        display = f"{tid} - {r['train_number']} - {r['train_name']}"
         train_map[display] = tid
         train_choices.append(display)
 
     train_choice = questionary.select("Select train:", choices=train_choices).ask()
     if not train_choice:
-        console.print("[yellow]Operation cancelled[/yellow]")
-        return
-    train_id = int(train_map[train_choice])
-
-    # list stations
-    try:
-        from services import station as station_service
-
-        stations = station_service.list_stations()
-    except Exception as e:
-        console.print(f"[bold red] Error fetching stations: {e}[/bold red]")
         return
 
-    if not stations:
-        console.print("[yellow]No stations available. Add stations first.[/yellow]")
-        return
+    train_id = train_map[train_choice]
+
+    # ================= STATIONS =================
+    from services import station as station_service
+
+    stations = station_service.list_stations()
 
     station_map = {}
     station_choices = []
-    for s in stations:
-        try:
-            sid = s["id"]
-            scode = s["code"]
-            sname = s["name"]
-        except Exception:
-            sid = s[0]
-            scode = s[1]
-            sname = s[2]
 
-        display = f"{sid} - {scode} - {sname}"
-        station_map[display] = sid
+    for s in stations:
+        display = f"{s['id']} - {s['code']} - {s['name']}"
+        station_map[display] = s["id"]
         station_choices.append(display)
 
     origin_choice = questionary.select(
         "Select origin station:", choices=station_choices
     ).ask()
-    if not origin_choice:
-        console.print("[yellow]Operation cancelled[/yellow]")
-        return
-    origin_id = int(station_map[origin_choice])
-
-    # choose destination (prevent same as origin)
-    dest_choices = [c for c in station_choices if c != origin_choice]
-    if not dest_choices:
-        console.print(
-            "[yellow]Need at least two stations to schedule a journey[/yellow]"
-        )
-        return
+    origin_id = station_map[origin_choice]
 
     dest_choice = questionary.select(
-        "Select destination station:", choices=dest_choices
+        "Select destination station:",
+        choices=[c for c in station_choices if c != origin_choice],
     ).ask()
-    if not dest_choice:
-        console.print("[yellow]Operation cancelled[/yellow]")
-        return
-    dest_id = int(station_map[dest_choice])
+    dest_id = station_map[dest_choice]
 
-    # times and date
-    travel_date = questionary.text("Travel date (YYYY-MM-DD):").ask()
-    departure_time = questionary.text("Departure time (HH:MM):").ask()
-    arrival_time = questionary.text("Arrival time (HH:MM):").ask()
+    # ================= SMART SUGGESTIONS =================
+    from services import schedule as schedule_service
 
-    # validate simple formats
+    schedules = schedule_service.list_schedules()
+
+    existing_dates = set()
+    existing_dep = set()
+    existing_arr = set()
+
+    for s in schedules:
+        if s["train_id"] == train_id:
+            existing_dates.add(s["travel_date"])
+            existing_dep.add(s["departure_time"])
+            existing_arr.add(s["arrival_time"])
+
+    console.print("\n[yellow]Select from existing or choose manual entry[/yellow]\n")
+
+    # ---------- DATE ----------
+    date_choice = questionary.select(
+        "Travel Date:",
+        choices=sorted(existing_dates) + ["<Enter new date>"],
+    ).ask()
+
+    if date_choice == "<Enter new date>":
+        travel_date = questionary.text("Enter new date (YYYY-MM-DD):").ask()
+    else:
+        travel_date = date_choice
+
+    # ---------- DEPARTURE ----------
+    dep_choice = questionary.select(
+        "Departure Time:",
+        choices=sorted(existing_dep) + ["<Enter new time>"],
+    ).ask()
+
+    if dep_choice == "<Enter new time>":
+        departure_time = questionary.text("Enter departure (HH:MM):").ask()
+    else:
+        departure_time = dep_choice
+
+    # ---------- ARRIVAL ----------
+    arr_choice = questionary.select(
+        "Arrival Time:",
+        choices=sorted(existing_arr) + ["<Enter new time>"],
+    ).ask()
+
+    if arr_choice == "<Enter new time>":
+        arrival_time = questionary.text("Enter arrival (HH:MM):").ask()
+    else:
+        arrival_time = arr_choice
+
+    # ================= VALIDATION =================
     from datetime import datetime
 
     try:
@@ -235,14 +248,11 @@ def admin_schedule_new_train_jouney() -> None:
         datetime.strptime(departure_time, "%H:%M")
         datetime.strptime(arrival_time, "%H:%M")
     except Exception:
-        console.print(
-            "[bold red]Invalid date/time format. Use YYYY-MM-DD and HH:MM[/bold red]"
-        )
+        console.print("[bold red]Invalid date/time format[/bold red]")
         return
 
+    # ================= CREATE =================
     try:
-        from services import schedule as schedule_service
-
         sched_id = schedule_service.create_schedule(
             train_id,
             origin_id,
@@ -251,9 +261,130 @@ def admin_schedule_new_train_jouney() -> None:
             departure_time,
             arrival_time,
         )
+
         console.print(f"[bold green]Schedule created (id={sched_id})[/bold green]")
+
     except Exception as e:
         console.print(f"[bold red] Error creating schedule: {e}[/bold red]")
+
+
+# def admin_schedule_new_train_jouney() -> None:
+#     console.print("[cyan] Schedule New Train Journey[/cyan]")
+
+#     # list trains
+#     rows = train_service.list_trains()
+#     if not rows:
+#         console.print("[yellow]No trains available to schedule[/yellow]")
+#         return
+
+#     train_map = {}
+#     train_choices = []
+#     for r in rows:
+#         # r may be sqlite3.Row or tuple
+#         try:
+#             tid = r["id"]
+#             tnum = r["train_number"]
+#             tname = r["train_name"]
+#         except Exception:
+#             tid = r[0]
+#             tnum = r[1]
+#             tname = r[2]
+
+#         display = f"{tid} - {tnum} - {tname}"
+#         train_map[display] = tid
+#         train_choices.append(display)
+
+#     train_choice = questionary.select("Select train:", choices=train_choices).ask()
+#     if not train_choice:
+#         console.print("[yellow]Operation cancelled[/yellow]")
+#         return
+#     train_id = int(train_map[train_choice])
+
+#     # list stations
+#     try:
+#         from services import station as station_service
+
+#         stations = station_service.list_stations()
+#     except Exception as e:
+#         console.print(f"[bold red] Error fetching stations: {e}[/bold red]")
+#         return
+
+#     if not stations:
+#         console.print("[yellow]No stations available. Add stations first.[/yellow]")
+#         return
+
+#     station_map = {}
+#     station_choices = []
+#     for s in stations:
+#         try:
+#             sid = s["id"]
+#             scode = s["code"]
+#             sname = s["name"]
+#         except Exception:
+#             sid = s[0]
+#             scode = s[1]
+#             sname = s[2]
+
+#         display = f"{sid} - {scode} - {sname}"
+#         station_map[display] = sid
+#         station_choices.append(display)
+
+#     origin_choice = questionary.select(
+#         "Select origin station:", choices=station_choices
+#     ).ask()
+#     if not origin_choice:
+#         console.print("[yellow]Operation cancelled[/yellow]")
+#         return
+#     origin_id = int(station_map[origin_choice])
+
+#     # choose destination (prevent same as origin)
+#     dest_choices = [c for c in station_choices if c != origin_choice]
+#     if not dest_choices:
+#         console.print(
+#             "[yellow]Need at least two stations to schedule a journey[/yellow]"
+#         )
+#         return
+
+#     dest_choice = questionary.select(
+#         "Select destination station:", choices=dest_choices
+#     ).ask()
+#     if not dest_choice:
+#         console.print("[yellow]Operation cancelled[/yellow]")
+#         return
+#     dest_id = int(station_map[dest_choice])
+
+#     # times and date
+#     travel_date = questionary.text("Travel date (YYYY-MM-DD):").ask()
+#     departure_time = questionary.text("Departure time (HH:MM):").ask()
+#     arrival_time = questionary.text("Arrival time (HH:MM):").ask()
+
+#     # validate simple formats
+#     from datetime import datetime
+
+#     try:
+#         datetime.strptime(travel_date, "%Y-%m-%d")
+#         datetime.strptime(departure_time, "%H:%M")
+#         datetime.strptime(arrival_time, "%H:%M")
+#     except Exception:
+#         console.print(
+#             "[bold red]Invalid date/time format. Use YYYY-MM-DD and HH:MM[/bold red]"
+#         )
+#         return
+
+#     try:
+#         from services import schedule as schedule_service
+
+#         sched_id = schedule_service.create_schedule(
+#             train_id,
+#             origin_id,
+#             dest_id,
+#             travel_date,
+#             departure_time,
+#             arrival_time,
+#         )
+#         console.print(f"[bold green]Schedule created (id={sched_id})[/bold green]")
+#     except Exception as e:
+#         console.print(f"[bold red] Error creating schedule: {e}[/bold red]")
 
 
 def train_details_update() -> None:
@@ -300,32 +431,40 @@ def train_journey_details_update() -> None:
         return
 
     journey_map = {}
-    journey_choices = []
+    journey_row_map = {}
 
     for r in rows:
-        try:
-            jid = r["id"]
-            train = r["train_id"]
-            origin = r["origin_id"]
-            dest = r["destination_id"]
-            date = r["travel_date"]
-        except Exception:
-            jid, train, origin, dest, date = r[:5]
+        jid = r["id"]
 
-        display = f"{jid} | Train:{train} | {origin}->{dest} | {date}"
+        display = (
+            f"{jid} | Train:{r['train_id']} | "
+            f"{r['origin_station_id']}->{r['destination_station_id']} | "
+            f"{r['travel_date']} {r['departure_time']}-{r['arrival_time']}"
+        )
+
         journey_map[display] = jid
-        journey_choices.append(display)
+        journey_row_map[jid] = r
 
     choice = questionary.select(
         "Select journey to update:",
-        choices=journey_choices,
+        choices=list(journey_map.keys()),
     ).ask()
 
     if not choice:
-        console.print("[yellow]Operation cancelled[/yellow]")
         return
 
     schedule_id = journey_map[choice]
+    current = journey_row_map[schedule_id]
+
+    # current values
+    train_id = current["train_id"]
+    origin_id = current["origin_station_id"]
+    dest_id = current["destination_station_id"]
+    travel_date = current["travel_date"]
+    departure_time = current["departure_time"]
+    arrival_time = current["arrival_time"]
+
+    console.print("\n[yellow]Press ENTER to keep existing value[/yellow]\n")
 
     # ================= STATIONS =================
     stations = station_service.list_stations()
@@ -334,35 +473,41 @@ def train_journey_details_update() -> None:
     station_choices = []
 
     for s in stations:
-        try:
-            sid = s["id"]
-            code = s["code"]
-            name = s["name"]
-        except Exception:
-            sid, code, name = s[:3]
-
-        display = f"{sid} - {code} - {name}"
-        station_map[display] = sid
+        display = f"{s['id']} - {s['code']} - {s['name']}"
+        station_map[display] = s["id"]
         station_choices.append(display)
 
+    # ORIGIN
     origin_choice = questionary.select(
-        "New origin station:",
-        choices=station_choices,
+        f"Origin station [current: {origin_id}]",
+        choices=["<keep current>"] + station_choices,
     ).ask()
 
+    if origin_choice != "<keep current>":
+        origin_id = station_map[origin_choice]
+
+    # DESTINATION
     dest_choice = questionary.select(
-        "New destination station:",
-        choices=[c for c in station_choices if c != origin_choice],
+        f"Destination station [current: {dest_id}]",
+        choices=["<keep current>"] + station_choices,
     ).ask()
 
-    origin_id = station_map[origin_choice]
-    dest_id = station_map[dest_choice]
+    if dest_choice != "<keep current>":
+        dest_id = station_map[dest_choice]
 
     # ================= DATE/TIME =================
-    travel_date = questionary.text("Travel date (YYYY-MM-DD):").ask()
-    departure_time = questionary.text("Departure time (HH:MM):").ask()
-    arrival_time = questionary.text("Arrival time (HH:MM):").ask()
+    new_date = questionary.text(f"Travel date (YYYY-MM-DD) [{travel_date}]:").ask()
 
+    new_dep = questionary.text(f"Departure time (HH:MM) [{departure_time}]:").ask()
+
+    new_arr = questionary.text(f"Arrival time (HH:MM) [{arrival_time}]:").ask()
+
+    # keep old if blank
+    travel_date = new_date or travel_date
+    departure_time = new_dep or departure_time
+    arrival_time = new_arr or arrival_time
+
+    # ================= VALIDATION =================
     from datetime import datetime
 
     try:
@@ -370,16 +515,14 @@ def train_journey_details_update() -> None:
         datetime.strptime(departure_time, "%H:%M")
         datetime.strptime(arrival_time, "%H:%M")
     except Exception:
-        console.print(
-            "[bold red]Invalid date/time format. Use YYYY-MM-DD and HH:MM[/bold red]"
-        )
+        console.print("[bold red]Invalid date/time format[/bold red]")
         return
 
     # ================= UPDATE =================
     try:
         schedule_service.update_schedule(
             schedule_id,
-            train,
+            train_id,
             origin_id,
             dest_id,
             travel_date,
@@ -401,8 +544,6 @@ def delete_train_by_admin() -> None:
         console.print("[bold green]Train marked inactive[/bold green]")
     except Exception as e:
         console.print(f"[bold red] Error deleting train: {e}[/bold red]")
-
-
 
 
 def admin_view_all_trains() -> None:
@@ -433,6 +574,7 @@ def admin_view_all_trains() -> None:
             table.add_row(*[str(x) for x in r])
 
     console.print(table)
+
 
 def admin_view_all_stations() -> None:
     console.print("[cyan] All Stations[/cyan]")
@@ -510,6 +652,96 @@ def admin_view_all_train_jouneys() -> None:
 
     except Exception as e:
         console.print(f"[bold red] Error Viewing Train Journeys: {e}[/bold red]")
+
+
+
+
+def admin_view_train_route_by_train() -> None:
+    console.print("[cyan] View Train Route by Train[/cyan]")
+
+    # ================= TRAIN SELECTION =================
+    rows = train_service.list_trains()
+
+    if not rows:
+        console.print("[yellow]No trains available[/yellow]")
+        return
+
+    train_map = {}
+    train_choices = []
+
+    for r in rows:
+        display = f"{r['id']} - {r['train_number']} - {r['train_name']}"
+        train_map[display] = r["id"]
+        train_choices.append(display)
+
+    train_choice = questionary.select(
+        "Select Train:",
+        choices=train_choices
+    ).ask()
+
+    if not train_choice:
+        return
+
+    train_id = train_map[train_choice]
+
+    try:
+        from services import schedule as schedule_service
+        from services import station as station_service
+
+        schedules = schedule_service.get_schedules_by_train(train_id)
+
+        if not schedules:
+            console.print("[yellow]No journeys found for this train[/yellow]")
+            return
+
+        # ================= LOAD STATION NAMES =================
+        stations = station_service.list_stations()
+        station_lookup = {s["id"]: s["name"] for s in stations}
+
+        # ================= GROUP ROUTES =================
+        # key = (date, dep, arr)
+        grouped = defaultdict(list)
+
+        for r in schedules:
+            key = (
+                r["travel_date"],
+                r["departure_time"],
+                r["arrival_time"],
+            )
+
+            grouped[key].append(
+                (
+                    station_lookup.get(r["origin_station_id"], str(r["origin_station_id"])),
+                    station_lookup.get(r["destination_station_id"], str(r["destination_station_id"])),
+                )
+            )
+
+        # ================= DISPLAY =================
+        console.print(f"\n[bold green]{train_choice}[/bold green]\n")
+
+        for (date, dep, arr), routes in grouped.items():
+
+            table = Table(show_header=True, header_style="bold magenta")
+
+            table.title = f"Date: {date} | {dep} → {arr}"
+
+            table.add_column("Route")
+
+            # build route chain
+            path = []
+            for o, d in routes:
+                if not path:
+                    path.append(o)
+                path.append(d)
+
+            route_string = " → ".join(path)
+
+            table.add_row(route_string)
+
+            console.print(table)
+
+    except Exception as e:
+        console.print(f"[bold red] Error Viewing Train Routes: {e}[/bold red]")
 
 
 

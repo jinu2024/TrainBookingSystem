@@ -283,6 +283,18 @@ def find_schedules(conn, origin_id, destination_id, travel_date):
     )
     return cur.fetchall()
 
+def get_schedule_by_id(conn, schedule_id):
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT s.*, t.train_number, t.train_name
+        FROM schedules s
+        JOIN trains t ON s.train_id = t.id
+        WHERE s.id = ?
+        """,
+        (schedule_id,),
+    )
+    return cur.fetchone()
 
 def get_all_schedules(conn):
     cur = conn.cursor()
@@ -290,6 +302,20 @@ def get_all_schedules(conn):
         """
         SELECT * from schedules
         """
+    )
+    return cur.fetchall()
+
+
+def get_schedules_by_train(conn, train_id):
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT s.*, t.train_number, t.train_name
+        FROM schedules s
+        JOIN trains t ON s.train_id = t.id
+        WHERE s.train_id = ?
+        """,
+        (train_id,),
     )
     return cur.fetchall()
 

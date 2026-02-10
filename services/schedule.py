@@ -162,3 +162,12 @@ def list_schedules() -> list:
         return queries.get_all_schedules(conn)
     finally:
         connection.close_connection(conn)
+
+
+def get_schedules_by_train(train_id: int) -> list:
+    """Return all schedules for a specific train as a list of rows."""
+    conn = connection.get_connection()
+    try:
+        return queries.get_schedules_by_train(conn, train_id)
+    finally:
+        connection.close_connection(conn)

@@ -4,6 +4,8 @@ import sys
 import questionary
 from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
+
 
 from services import user as user_service
 from services import train as train_service
@@ -401,6 +403,8 @@ def delete_train_by_admin() -> None:
         console.print(f"[bold red] Error deleting train: {e}[/bold red]")
 
 
+
+
 def admin_view_all_trains() -> None:
     console.print("[cyan] All Trains[/cyan]")
     rows = train_service.list_trains()
@@ -409,30 +413,66 @@ def admin_view_all_trains() -> None:
         console.print("[yellow]No trains found[/yellow]")
         return
 
-    for row in rows:
-        console.print(row)
+    table = Table(show_header=True, header_style="bold magenta")
 
+    table.add_column("ID")
+    table.add_column("Train Number")
+    table.add_column("Train Name")
+    table.add_column("Status")
+
+    for r in rows:
+        try:
+            table.add_row(
+                str(r["id"]),
+                str(r["train_number"]),
+                str(r["train_name"]),
+                str(r["status"]),
+            )
+        except Exception:
+            # fallback if tuple
+            table.add_row(*[str(x) for x in r])
+
+    console.print(table)
 
 def admin_view_all_stations() -> None:
-    console.print("[cyan] All Trains[/cyan]")
+    console.print("[cyan] All Stations[/cyan]")
+
     try:
-        # import station service lazily to avoid circular imports
         from services import station as station_service
 
         rows = station_service.list_stations()
 
         if not rows:
-            console.print("[yellow]No trains found[/yellow]")
+            console.print("[yellow]No stations found[/yellow]")
             return
 
-        for row in rows:
-            console.print(row)
+        table = Table(show_header=True, header_style="bold magenta")
+
+        table.add_column("ID")
+        table.add_column("Code")
+        table.add_column("Name")
+        table.add_column("City")
+
+        for r in rows:
+            try:
+                table.add_row(
+                    str(r["id"]),
+                    str(r["code"]),
+                    str(r["name"]),
+                    str(r["city"]),
+                )
+            except Exception:
+                table.add_row(*[str(x) for x in r])
+
+        console.print(table)
+
     except Exception as e:
         console.print(f"[bold red] Error Viewing Stations: {e}[/bold red]")
 
 
 def admin_view_all_train_jouneys() -> None:
     console.print("[cyan] All Train Journeys[/cyan]")
+
     try:
         from services import schedule as schedule_service
 
@@ -442,10 +482,35 @@ def admin_view_all_train_jouneys() -> None:
             console.print("[yellow]No train journeys found[/yellow]")
             return
 
-        for row in rows:
-            console.print(row)
+        table = Table(show_header=True, header_style="bold magenta")
+
+        table.add_column("ID")
+        table.add_column("Train")
+        table.add_column("Origin")
+        table.add_column("Destination")
+        table.add_column("Date")
+        table.add_column("Departure")
+        table.add_column("Arrival")
+
+        for r in rows:
+            try:
+                table.add_row(
+                    str(r["id"]),
+                    str(r["train_id"]),
+                    str(r["origin_station_id"]),
+                    str(r["destination_station_id"]),
+                    str(r["travel_date"]),
+                    str(r["departure_time"]),
+                    str(r["arrival_time"]),
+                )
+            except Exception:
+                table.add_row(*[str(x) for x in r])
+
+        console.print(table)
+
     except Exception as e:
         console.print(f"[bold red] Error Viewing Train Journeys: {e}[/bold red]")
+
 
 
 if __name__ == "__main__":

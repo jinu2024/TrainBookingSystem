@@ -84,3 +84,22 @@ CREATE TABLE IF NOT EXISTS sessions (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
+
+-- PAYMENTS
+CREATE TABLE IF NOT EXISTS payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    booking_id INTEGER NOT NULL,
+    amount REAL NOT NULL,
+    method TEXT CHECK(method IN ('upi', 'card', 'netbanking')) NOT NULL,
+
+    status TEXT CHECK(status IN ('success', 'failed', 'pending')) NOT NULL,
+    transaction_id TEXT UNIQUE,
+
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (booking_id) REFERENCES bookings(id)
+);
+
+
+

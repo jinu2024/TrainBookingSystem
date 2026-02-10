@@ -371,3 +371,110 @@ def save_passengers_for_user(conn, user_id, passengers_json):
         "UPDATE users SET passengers = ? WHERE id = ?", (passengers_json, user_id)
     )
     conn.commit()
+
+
+# -------------------------
+# BOOKING QUERIES
+# -------------------------
+
+
+def create_booking(
+    conn,
+    booking_code,
+    user_id,
+    train_id,
+    origin_station_id,
+    destination_station_id,
+    travel_date,
+):
+    """
+    Insert a new booking record.
+
+    Returns the new booking id.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO bookings (
+            booking_code,
+            user_id,
+            train_id,
+            origin_station_id,
+            destination_station_id,
+            travel_date
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            booking_code,
+            user_id,
+            train_id,
+            origin_station_id,
+            destination_station_id,
+            travel_date,
+        ),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def get_bookings_by_user(conn, user_id):
+    """
+    Return all bookings for a user with train & station details.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT
+            b.id,
+            b.booking_code,
+            b.travel_date,
+            b.status,
+            b.created_at,
+
+            t.train_number,
+            t.train_name,
+
+            so.name AS origin_station,
+            sd.name AS destination_station
+        FROM bookings b
+        JOIN trains t ON b.train_id = t.id
+        JOIN stations so ON b.origin_station_id = so.id
+        JOIN stations sd ON b.destination_station_id = sd.id
+        WHERE b.user_id = ?
+        ORDER BY b.created_at DESC
+        """,
+        (user_id,),
+    )
+    return cur.fetchall()
+
+
+def get_booking_by_code(conn, booking_code):
+    """
+    Fetch a single booking using booking_code.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT * FROM bookings
+        WHERE booking_code = ?
+        """,
+        (booking_code,),
+    )
+    return cur.fetchone()
+
+
+def cancel_booking(conn, booking_code):
+    """
+    Mark a booking as cancelled.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        """
+        UPDATE bookings
+        SET status = 'cancelled'
+        WHERE booking_code = ?
+        """,
+        (booking_code,),
+    )
+    conn.commit()

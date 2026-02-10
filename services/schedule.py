@@ -48,7 +48,7 @@ def create_schedule(
         raise ValueError("fare must be greater than zero")
 
     # departure must be before arrival (same-day journeys enforced here)
-    if dep_time_obj >= arr_time_obj:
+    if departure_time >= arrival_time:
         raise ValueError("departure_time must be earlier than arrival_time")
 
     conn = connection.get_connection()
@@ -98,6 +98,7 @@ def update_schedule(
     travel_date: str,
     departure_time: str,
     arrival_time: str,
+    fare: float,
 ) -> None:
     """Update an existing schedule after validating inputs.
 
@@ -164,6 +165,7 @@ def update_schedule(
             departure_time,
             arrival_time,
             travel_date,
+            float(fare),
         )
 
     finally:

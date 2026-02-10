@@ -242,6 +242,7 @@ def update_schedule(
     dep_time,
     arr_time,
     travel_date,
+    fare,
 ):
     cursor = conn.cursor()
 
@@ -254,6 +255,7 @@ def update_schedule(
             departure_time = ?,
             arrival_time = ?,
             travel_date = ?
+            fare = ?
         WHERE id = ?
         """,
         (
@@ -263,6 +265,7 @@ def update_schedule(
             dep_time,
             arr_time,
             travel_date,
+            fare,
             schedule_id,
         ),
     )
@@ -296,6 +299,7 @@ def find_schedules(conn, origin_id, destination_id, travel_date):
     )
     return cur.fetchall()
 
+
 def get_schedule_by_id(conn, schedule_id):
     cur = conn.cursor()
     cur.execute(
@@ -308,6 +312,7 @@ def get_schedule_by_id(conn, schedule_id):
         (schedule_id,),
     )
     return cur.fetchone()
+
 
 def get_all_schedules(conn):
     cur = conn.cursor()

@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS payments (
     amount REAL NOT NULL,
     method TEXT CHECK(method IN ('upi', 'card', 'netbanking')) NOT NULL,
 
-    status TEXT CHECK(status IN ('success', 'failed', 'pending')) NOT NULL,
+    status TEXT CHECK(status IN ('success', 'failed', 'pending', 'refunded')) NOT NULL,
     transaction_id TEXT UNIQUE,
 
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,

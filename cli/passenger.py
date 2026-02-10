@@ -3,8 +3,10 @@ from __future__ import annotations
 import questionary
 from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
 
 from ui import messages
+from services import booking
 
 
 def register_customer(interactive: bool = True, username: str | None = None, email: str | None = None, password: str | None = None, full_name: str | None = None, dob: str | None = None, gender: str | None = None, mobile: str | None = None, aadhaar: str | None = None, nationality: str | None = None, address: str | None = None) -> dict:
@@ -231,7 +233,7 @@ def book_tickets_dashboard(username: str) -> None:
 
         conn = connection.get_connection()
 
-        # 1️⃣ Select stations
+        # Stations
         stations = queries.get_all_stations(conn)
         if not stations:
             messages.show_error("No stations available")
@@ -241,30 +243,19 @@ def book_tickets_dashboard(username: str) -> None:
             f"{s['id']} - {s['name']} ({s['city']})" for s in stations
         ]
 
-        origin = questionary.select(
-            "Select origin station:", choices=station_choices
-        ).ask()
-        destination = questionary.select(
-            "Select destination station:", choices=station_choices
-        ).ask()
-
+        origin = questionary.select("Select origin:", choices=station_choices).ask()
+        destination = questionary.select("Select destination:", choices=station_choices).ask()
         if not origin or not destination:
             return
 
         origin_id = int(origin.split(" - ")[0])
         destination_id = int(destination.split(" - ")[0])
 
-        travel_date = questionary.text(
-            "Travel date (YYYY-MM-DD):"
-        ).ask()
+        travel_date = questionary.text("Travel date (YYYY-MM-DD):").ask()
 
-        # 2️⃣ Find trains
-        schedules = queries.find_schedules(
-            conn, origin_id, destination_id, travel_date
-        )
-
+        schedules = queries.find_schedules(conn, origin_id, destination_id, travel_date)
         if not schedules:
-            messages.show_info("No trains available for this route and date.")
+            messages.show_info("No trains available.")
             return
 
         train_choices = {
@@ -273,54 +264,37 @@ def book_tickets_dashboard(username: str) -> None:
             for s in schedules
         }
 
-
         selected_label = questionary.select(
-    "Select train:", choices=list(train_choices.keys())
-).ask()
-
+            "Select train:", choices=list(train_choices.keys())
+        ).ask()
         if not selected_label:
             return
 
         selected_schedule = train_choices[selected_label]
-
         train_id = selected_schedule["train_id"]
         fare = selected_schedule["fare"]
 
-
-        # 3️⃣ Proceed to payment?
-        proceed = questionary.confirm("Proceed to payment?").ask()
-        if not proceed:
-            messages.show_info("Booking cancelled before payment.")
+        if not questionary.confirm("Proceed to payment?").ask():
             return
 
-        # 4️⃣ Card details (UI-only validation)
-        card_number = questionary.text("Card Number (16 digits):").ask()
-        if not is_valid_card_number(card_number):
+        # Card validation
+        if not is_valid_card_number(questionary.text("Card Number:").ask()):
             messages.show_error("Invalid card number")
             return
-
-        expiry = questionary.text("Expiry (MM/YY):").ask()
-        if not is_valid_expiry(expiry):
-            messages.show_error("Invalid or expired card")
+        if not is_valid_expiry(questionary.text("Expiry (MM/YY):").ask()):
+            messages.show_error("Invalid expiry")
             return
-
-        cvv = questionary.password("CVV (3 digits):").ask()
-        if not is_valid_cvv(cvv):
+        if not is_valid_cvv(questionary.password("CVV:").ask()):
             messages.show_error("Invalid CVV")
             return
-
-        otp = questionary.text("Enter OTP sent to your mobile:").ask()
-        if not is_valid_otp(otp):
+        if not is_valid_otp(questionary.text("Enter OTP:").ask()):
             messages.show_error("Invalid OTP")
             return
 
-        # 5️⃣ Mock payment (no booking yet!)
-        payment = process_payment(
-            amount=fare,
-            method="card",
-        )
+        # Payment
+        payment = process_payment(amount=fare, method="card")
 
-        # 6️⃣ Create booking ONLY AFTER payment success
+        # Booking + payment (service handles DB)
         booking = book_ticket(
             username=username,
             train_id=train_id,
@@ -328,9 +302,9 @@ def book_tickets_dashboard(username: str) -> None:
             destination_station_id=destination_id,
             travel_date=travel_date,
             fare=fare,
+            payment=payment,
         )
 
-        # 7️⃣ Success screen
         console.print(
             Panel(
                 f"""
@@ -339,7 +313,7 @@ def book_tickets_dashboard(username: str) -> None:
 Booking Code : {booking['booking_code']}
 Train        : {booking['train_number']} - {booking['train_name']}
 Date         : {booking['travel_date']}
-Amount Paid  : ₹₹{fare}
+Amount Paid  : ₹{fare}
 
 🎟️ Have a safe journey!
                 """,
@@ -352,8 +326,7 @@ Amount Paid  : ₹₹{fare}
 
     finally:
         try:
-            if conn:
-                connection.close_connection(conn)
+            connection.close_connection(conn)
         except Exception:
             pass
 
@@ -361,7 +334,51 @@ Amount Paid  : ₹₹{fare}
 def booking_history_dashboard(username: str) -> None:
     console = Console()
     console.print(Panel(f"Booking History — {username}", style="bold magenta"))
-    messages.show_info("Booking history not implemented yet.")
+
+    try:
+        bookings = booking.get_booking_history(username)
+
+        table = Table(show_header=True, header_style="bold cyan")
+        table.add_column("Booking Code")
+        table.add_column("Train")
+        table.add_column("Route")
+        table.add_column("Date")
+        table.add_column("Fare", justify="right")
+        table.add_column("Booking Status")
+        table.add_column("Payment Status")
+        table.add_column("Txn ID")
+
+        for b in bookings:
+            # Booking status
+            booking_status = (
+                "[green]CONFIRMED[/green]"
+                if b["booking_status"] == "confirmed"
+                else "[red]CANCELLED[/red]"
+            )
+
+            # Payment status (CORRECT LOGIC)
+            if b["payment_status"] == "success":
+                payment_status = "[green]SUCCESS[/green]"
+            elif b["payment_status"] == "refunded":
+                payment_status = "[yellow]REFUNDED[/yellow]"
+            else:
+                payment_status = "-"
+
+            table.add_row(
+                b["booking_code"],
+                f'{b["train_number"]} {b["train_name"]}',
+                f'{b["origin_station"]} → {b["destination_station"]}',
+                b["travel_date"],
+                f'₹{b["fare"]}',
+                booking_status,
+                payment_status,
+                b["transaction_id"] or "-"
+            )
+
+        console.print(table)
+
+    except ValueError as e:
+        messages.show_warning(str(e))
 
 
 def profile_dashboard(username: str) -> None:

@@ -507,6 +507,30 @@ def get_bookings_by_user(conn, user_id):
     )
     return cur.fetchall()
 
+def create_payment(
+    conn,
+    booking_id: int,
+    amount: float,
+    method: str,
+    status: str,
+    transaction_id: str,
+):
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO payments (
+            booking_id,
+            amount,
+            method,
+            status,
+            transaction_id
+        )
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (booking_id, amount, method, status, transaction_id),
+    )
+    conn.commit()
+
 
 def get_booking_by_code(conn, booking_code):
     """
@@ -537,3 +561,20 @@ def cancel_booking(conn, booking_code):
         (booking_code,),
     )
     conn.commit()
+
+
+def refund_payment_by_booking_id(conn, booking_id):
+    """
+    Mark payment as refunded for a booking.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        """
+        UPDATE payments
+        SET status = 'refunded'
+        WHERE booking_id = ?
+        """,
+        (booking_id,),
+    )
+    conn.commit()
+

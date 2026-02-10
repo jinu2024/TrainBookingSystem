@@ -32,6 +32,7 @@ def book_ticket(
     origin_station_id: int,
     destination_station_id: int,
     travel_date: str,
+    fare:float,
 ) -> dict:
     """
     Create a new booking for a customer.
@@ -92,6 +93,7 @@ def book_ticket(
             origin_station_id,
             destination_station_id,
             travel_date,
+            fare,
         )
 
         # 6. return summary
@@ -102,6 +104,7 @@ def book_ticket(
             "train_number": train["train_number"],
             "train_name": train["train_name"],
             "travel_date": travel_date,
+            "fare": fare,
             "status": "confirmed",
         }
 

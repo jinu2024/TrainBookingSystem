@@ -250,8 +250,21 @@ def admin_schedule_new_train_jouney() -> None:
     except Exception:
         console.print("[bold red]Invalid date/time format[/bold red]")
         return
+    
+    fare_input = questionary.text("Fare amount (₹):").ask()
+    if not fare_input:
+        console.print("[yellow]Operation cancelled[/yellow]")
+        return
 
-    # ================= CREATE =================
+    try:
+        fare = float(fare_input)
+        if fare <= 0:
+            raise ValueError
+    except Exception:
+        console.print("[bold red]Invalid fare. Enter a positive number[/bold red]")
+        return
+
+
     try:
         sched_id = schedule_service.create_schedule(
             train_id,
@@ -260,9 +273,9 @@ def admin_schedule_new_train_jouney() -> None:
             travel_date,
             departure_time,
             arrival_time,
+            fare,
         )
-
-        console.print(f"[bold green]Schedule created (id={sched_id})[/bold green]")
+        console.print(f"[bold green]Schedule created (id={sched_id}, Fare=₹{fare})[/bold green]")
 
     except Exception as e:
         console.print(f"[bold red] Error creating schedule: {e}[/bold red]")

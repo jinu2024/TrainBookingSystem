@@ -217,7 +217,105 @@ def manage_passengers(user_id: int) -> None:
 def book_tickets_dashboard(username: str) -> None:
     console = Console()
     console.print(Panel(f"Book Tickets — {username}", style="bold magenta"))
-    messages.show_info("Booking UI not implemented yet.")
+
+    try:
+        from database import connection, queries
+        from services.booking import book_ticket
+
+        conn = connection.get_connection()
+
+        # 1. fetch stations
+        stations = queries.get_all_stations(conn)
+        if not stations:
+            messages.show_error("No stations available")
+            return
+
+        station_choices = [f"{s['id']} - {s['name']} ({s['city']})" for s in stations]
+
+        origin_choice = questionary.select(
+            "Select origin station:", choices=station_choices
+        ).ask()
+        destination_choice = questionary.select(
+            "Select destination station:", choices=station_choices
+        ).ask()
+
+        if not origin_choice or not destination_choice:
+            return
+
+        origin_id = int(origin_choice.split(" - ")[0])
+        destination_id = int(destination_choice.split(" - ")[0])
+
+        travel_date = questionary.text(
+            "Travel date (YYYY-MM-DD):"
+        ).ask()
+
+        # 2. find schedules
+        schedules = queries.find_schedules(
+            conn, origin_id, destination_id, travel_date
+        )
+
+        if not schedules:
+            messages.show_info("No trains available for selected route and date.")
+            return
+
+        train_choices = [
+            f"{s['train_id']} - {s['train_number']} ({s['train_name']}) | "
+            f"{s['departure_time']} → {s['arrival_time']}"
+            for s in schedules
+        ]
+
+        selected_train = questionary.select(
+            "Select a train:", choices=train_choices
+        ).ask()
+
+        if not selected_train:
+            return
+
+        train_id = int(selected_train.split(" - ")[0])
+
+        # 3. confirm booking
+        confirm = questionary.confirm(
+            "Confirm booking?"
+        ).ask()
+
+        if not confirm:
+            messages.show_info("Booking cancelled by user.")
+            return
+
+        # 4. call service
+        result = book_ticket(
+            username=username,
+            train_id=train_id,
+            origin_station_id=origin_id,
+            destination_station_id=destination_id,
+            travel_date=travel_date,
+        )
+
+        # 5. success message
+        console.print(
+            Panel(
+                f"""
+                ✅ Booking Confirmed!
+
+                Booking Code : {result['booking_code']}
+                Train        : {result['train_number']} - {result['train_name']}
+                Date         : {result['travel_date']}
+                Status       : {result['status']}
+                                """,
+                style="bold green",
+            )
+        )
+
+    except Exception as exc:
+        messages.show_error(str(exc))
+
+    finally:
+        try:
+            if conn:
+                connection.close_connection(conn)
+        except Exception:
+            pass
+
 
 
 def booking_history_dashboard(username: str) -> None:

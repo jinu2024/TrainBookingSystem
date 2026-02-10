@@ -60,9 +60,11 @@ def admin_dashboard(username: str) -> None:
                 "Schedule new Train Jouney",
                 "Update exisitng Train",
                 "Update existing Station",
+                "Update existing Train Journey",
                 "Delete Train",
                 "View All Trains",
                 "View All Stations",
+                "View All Train Jouneys",
                 "Logout",
             ],
         ).ask()
@@ -81,6 +83,9 @@ def admin_dashboard(username: str) -> None:
             continue
         if choice == "Update existing Station":
             station_details_update()
+            continue
+        if choice == "Update existing Train Journey":
+            train_journey_details_update
             continue
         if choice == "Delete Train":
             delete_train_by_admin()
@@ -273,6 +278,117 @@ def station_details_update() -> None:
         console.print("[bold green] Station Updated Successfully[/bold green]")
     except Exception as e:
         console.print(f"[bold red] Error updating Station details: {e}[/bold red]")
+
+
+def train_journey_details_update() -> None:
+    console.print("[cyan] Update Train Journey Details[/cyan]")
+
+    try:
+        from services import schedule as schedule_service
+        from services import station as station_service
+    except Exception as e:
+        console.print(f"[bold red] Import error: {e}[/bold red]")
+        return
+
+    # ================= LIST JOURNEYS =================
+    rows = schedule_service.list_schedules()
+
+    if not rows:
+        console.print("[yellow]No train journeys available[/yellow]")
+        return
+
+    journey_map = {}
+    journey_choices = []
+
+    for r in rows:
+        try:
+            jid = r["id"]
+            train = r["train_id"]
+            origin = r["origin_id"]
+            dest = r["destination_id"]
+            date = r["travel_date"]
+        except Exception:
+            jid, train, origin, dest, date = r[:5]
+
+        display = f"{jid} | Train:{train} | {origin}->{dest} | {date}"
+        journey_map[display] = jid
+        journey_choices.append(display)
+
+    choice = questionary.select(
+        "Select journey to update:",
+        choices=journey_choices,
+    ).ask()
+
+    if not choice:
+        console.print("[yellow]Operation cancelled[/yellow]")
+        return
+
+    schedule_id = journey_map[choice]
+
+    # ================= STATIONS =================
+    stations = station_service.list_stations()
+
+    station_map = {}
+    station_choices = []
+
+    for s in stations:
+        try:
+            sid = s["id"]
+            code = s["code"]
+            name = s["name"]
+        except Exception:
+            sid, code, name = s[:3]
+
+        display = f"{sid} - {code} - {name}"
+        station_map[display] = sid
+        station_choices.append(display)
+
+    origin_choice = questionary.select(
+        "New origin station:",
+        choices=station_choices,
+    ).ask()
+
+    dest_choice = questionary.select(
+        "New destination station:",
+        choices=[c for c in station_choices if c != origin_choice],
+    ).ask()
+
+    origin_id = station_map[origin_choice]
+    dest_id = station_map[dest_choice]
+
+    # ================= DATE/TIME =================
+    travel_date = questionary.text("Travel date (YYYY-MM-DD):").ask()
+    departure_time = questionary.text("Departure time (HH:MM):").ask()
+    arrival_time = questionary.text("Arrival time (HH:MM):").ask()
+
+    from datetime import datetime
+
+    try:
+        datetime.strptime(travel_date, "%Y-%m-%d")
+        datetime.strptime(departure_time, "%H:%M")
+        datetime.strptime(arrival_time, "%H:%M")
+    except Exception:
+        console.print(
+            "[bold red]Invalid date/time format. Use YYYY-MM-DD and HH:MM[/bold red]"
+        )
+        return
+
+    # ================= UPDATE =================
+    try:
+        schedule_service.update_schedule(
+            schedule_id,
+            train,
+            origin_id,
+            dest_id,
+            travel_date,
+            departure_time,
+            arrival_time,
+        )
+
+        console.print("[bold green] Train Journey Updated Successfully[/bold green]")
+
+    except Exception as e:
+        console.print(f"[bold red] Error updating journey: {e}[/bold red]")
 
 
 def delete_train_by_admin() -> None:

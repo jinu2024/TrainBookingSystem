@@ -5,6 +5,7 @@ def add_station(code: str, name: str, city: str) -> int:
     """Add a station and return its id. Raises ValueError if code exists."""
     # validate station code format (6 chars expected)
     if not isinstance(code, str) or len(code) != 6:
+        print(f"Invalid station code: {code}")
         raise ValueError("station code must be a 6-character string")
     conn = connection.get_connection()
     try:

@@ -119,6 +119,12 @@ def get_all_stations(conn):
     return cur.fetchall()
 
 
+def get_station_by_id(conn, station_id):
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM stations WHERE id = ?", (station_id,))
+    return cur.fetchone()
+
+
 # -------------------------
 # TRAIN QUERIES
 # -------------------------
@@ -160,6 +166,12 @@ def get_train_by_number(conn, train_number):
         "SELECT * FROM trains WHERE train_number = ?",
         (train_number,),
     )
+    return cur.fetchone()
+
+
+def get_train_by_id(conn, train_id):
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM trains WHERE id = ?", (train_id,))
     return cur.fetchone()
 
 
@@ -218,6 +230,43 @@ def create_schedule(
     return cur.lastrowid
 
 
+def update_schedule(
+    conn,
+    schedule_id,
+    train_id,
+    origin_id,
+    dest_id,
+    dep_time,
+    arr_time,
+    travel_date,
+):
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        UPDATE schedules
+        SET train_id = ?,
+            origin_station_id = ?,
+            destination_station_id = ?,
+            departure_time = ?,
+            arrival_time = ?,
+            travel_date = ?
+        WHERE id = ?
+        """,
+        (
+            train_id,
+            origin_id,
+            dest_id,
+            dep_time,
+            arr_time,
+            travel_date,
+            schedule_id,
+        ),
+    )
+
+    conn.commit()
+
+
 def find_schedules(conn, origin_id, destination_id, travel_date):
     cur = conn.cursor()
     cur.execute(
@@ -237,7 +286,7 @@ def find_schedules(conn, origin_id, destination_id, travel_date):
 
 def get_all_schedules(conn):
     cur = conn.cursor()
-    cur.excute(
+    cur.execute(
         """
         SELECT * from schedules
         """

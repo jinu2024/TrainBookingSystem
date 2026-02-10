@@ -232,6 +232,20 @@ def admin_schedule_new_train_jouney() -> None:
             "[bold red]Invalid date/time format. Use YYYY-MM-DD and HH:MM[/bold red]"
         )
         return
+    
+    fare_input = questionary.text("Fare amount (₹):").ask()
+    if not fare_input:
+        console.print("[yellow]Operation cancelled[/yellow]")
+        return
+
+    try:
+        fare = float(fare_input)
+        if fare <= 0:
+            raise ValueError
+    except Exception:
+        console.print("[bold red]Invalid fare. Enter a positive number[/bold red]")
+        return
+
 
     try:
         from services import schedule as schedule_service
@@ -243,8 +257,10 @@ def admin_schedule_new_train_jouney() -> None:
             travel_date,
             departure_time,
             arrival_time,
+            fare,
         )
-        console.print(f"[bold green]Schedule created (id={sched_id})[/bold green]")
+        console.print(f"[bold green]Schedule created (id={sched_id}, Fare=₹{fare})[/bold green]")
+
     except Exception as e:
         console.print(f"[bold red] Error creating schedule: {e}[/bold red]")
 

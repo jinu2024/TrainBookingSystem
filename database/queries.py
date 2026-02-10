@@ -191,6 +191,7 @@ def create_schedule(
     departure_time,
     arrival_time,
     travel_date,
+    fare,
 ):
     cur = conn.cursor()
     cur.execute(
@@ -201,9 +202,10 @@ def create_schedule(
             destination_station_id,
             departure_time,
             arrival_time,
-            travel_date
+            travel_date,
+            fare
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
             train_id,
@@ -212,6 +214,7 @@ def create_schedule(
             departure_time,
             arrival_time,
             travel_date,
+            fare,
         ),
     )
     conn.commit()
@@ -222,7 +225,17 @@ def find_schedules(conn, origin_id, destination_id, travel_date):
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT s.*, t.train_number, t.train_name
+        SELECT
+            s.id,
+            s.train_id,
+            s.origin_station_id,
+            s.destination_station_id,
+            s.departure_time,
+            s.arrival_time,
+            s.travel_date,
+            s.fare,
+            t.train_number,
+            t.train_name
         FROM schedules s
         JOIN trains t ON s.train_id = t.id
         WHERE s.origin_station_id = ?
@@ -337,6 +350,7 @@ def create_booking(
     origin_station_id,
     destination_station_id,
     travel_date,
+    fare,
 ):
     """
     Insert a new booking record.
@@ -352,9 +366,10 @@ def create_booking(
             train_id,
             origin_station_id,
             destination_station_id,
-            travel_date
+            travel_date,
+            fare
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?,?)
         """,
         (
             booking_code,
@@ -363,6 +378,7 @@ def create_booking(
             origin_station_id,
             destination_station_id,
             travel_date,
+            fare,
         ),
     )
     conn.commit()
@@ -371,7 +387,10 @@ def create_booking(
 
 def get_bookings_by_user(conn, user_id):
     """
-    Return all bookings for a user with train & station details.
+    Return all bookings for a user with train, station & payment details.
+
+    - Includes pending bookings (no payment yet)
+    - Includes confirmed bookings with payment info
     """
     cur = conn.cursor()
     cur.execute(
@@ -380,18 +399,27 @@ def get_bookings_by_user(conn, user_id):
             b.id,
             b.booking_code,
             b.travel_date,
-            b.status,
+            b.fare,
+            b.status AS booking_status,
             b.created_at,
 
             t.train_number,
             t.train_name,
 
             so.name AS origin_station,
-            sd.name AS destination_station
+            sd.name AS destination_station,
+
+            p.amount AS payment_amount,
+            p.method AS payment_method,
+            p.status AS payment_status,
+            p.transaction_id
+
         FROM bookings b
         JOIN trains t ON b.train_id = t.id
         JOIN stations so ON b.origin_station_id = so.id
         JOIN stations sd ON b.destination_station_id = sd.id
+        LEFT JOIN payments p ON p.booking_id = b.id
+
         WHERE b.user_id = ?
         ORDER BY b.created_at DESC
         """,

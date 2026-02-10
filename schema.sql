@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS schedules (
     departure_time TEXT NOT NULL,
     arrival_time TEXT NOT NULL,
     travel_date TEXT NOT NULL,
+    fare REAL NOT NULL,
     FOREIGN KEY (train_id) REFERENCES trains(id),
     FOREIGN KEY (origin_station_id) REFERENCES stations(id),
     FOREIGN KEY (destination_station_id) REFERENCES stations(id)
@@ -64,6 +65,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     destination_station_id INTEGER NOT NULL,
 
     travel_date TEXT NOT NULL,
+    fare REAL NOT NULL,
 
     status TEXT CHECK(status IN ('confirmed', 'cancelled')) DEFAULT 'confirmed',
 

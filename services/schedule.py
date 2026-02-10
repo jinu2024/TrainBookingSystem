@@ -12,6 +12,7 @@ def create_schedule(
     travel_date: str,
     departure_time: str,
     arrival_time: str,
+    fare: float,
 ) -> int:
     """Create a schedule entry after validating inputs.
 
@@ -21,25 +22,33 @@ def create_schedule(
     Returns the new schedule id.
     Raises ValueError on validation errors.
     """
-    # Basic validation
+    # Date validation
     try:
-        dt = datetime.strptime(travel_date, "%Y-%m-%d").date()
+        datetime.strptime(travel_date, "%Y-%m-%d").date()
     except Exception:
         raise ValueError("travel_date must be in YYYY-MM-DD format")
 
+    # Time validation
     try:
-        _ = datetime.strptime(departure_time, "%H:%M").time()
-        _ = datetime.strptime(arrival_time, "%H:%M").time()
+        datetime.strptime(departure_time, "%H:%M").time()
+        datetime.strptime(arrival_time, "%H:%M").time()
     except Exception:
         raise ValueError("departure_time and arrival_time must be in HH:MM format")
 
+    # Fare validation
+    if fare is None:
+        raise ValueError("fare is required")
+
+    try:
+        fare = float(fare)
+    except Exception:
+        raise ValueError("fare must be a number")
+
+    if fare <= 0:
+        raise ValueError("fare must be greater than zero")
+
     conn = connection.get_connection()
     try:
-        # ensure referenced records exist
-        train = queries.get_train_by_number(conn, train_id) if isinstance(train_id, str) else None
-        # The queries.create_schedule expects numeric IDs; callers should supply ids.
-        # We'll not try to look up by train_number here; ensure ids are ints.
-
         return queries.create_schedule(
             conn,
             int(train_id),
@@ -48,6 +57,7 @@ def create_schedule(
             departure_time,
             arrival_time,
             travel_date,
+            fare,
         )
     finally:
         connection.close_connection(conn)

@@ -7,7 +7,7 @@ wheels/
 *.egg-info
 
 # SQLite database
-database/*.db
+# database/*.db
 
 # Virtual environments
 .venv

@@ -487,16 +487,25 @@ def create_booking(
 
 def get_bookings_by_user(conn, user_id):
     """
-    Return all bookings for a user with train, station,
-    schedule (single matched row) & payment details.
+    Return all bookings for a user with:
+    - user details
+    - train details
+    - station details
+    - schedule details (single matched row)
+    - payment details
     """
 
     cur = conn.cursor()
+
     cur.execute(
         """
         SELECT
             b.id,
             b.booking_code,
+
+            u.username,
+            u.full_name,
+
             b.travel_date,
             b.fare,
             b.status AS booking_status,
@@ -508,7 +517,7 @@ def get_bookings_by_user(conn, user_id):
             so.name AS origin_station,
             sd.name AS destination_station,
 
-            -- Fetch ONE schedule row only
+            -- Fetch ONE matching schedule row safely
             (
                 SELECT s.departure_time
                 FROM schedules s
@@ -555,10 +564,21 @@ def get_bookings_by_user(conn, user_id):
             p.transaction_id
 
         FROM bookings b
-        JOIN trains t ON b.train_id = t.id
-        JOIN stations so ON b.origin_station_id = so.id
-        JOIN stations sd ON b.destination_station_id = sd.id
-        LEFT JOIN payments p ON p.booking_id = b.id
+
+        JOIN users u
+            ON b.user_id = u.id
+
+        JOIN trains t
+            ON b.train_id = t.id
+
+        JOIN stations so
+            ON b.origin_station_id = so.id
+
+        JOIN stations sd
+            ON b.destination_station_id = sd.id
+
+        LEFT JOIN payments p
+            ON p.booking_id = b.id
 
         WHERE b.user_id = ?
 

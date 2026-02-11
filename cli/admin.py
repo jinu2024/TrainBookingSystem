@@ -439,9 +439,16 @@ def train_journey_details_update() -> None:
     except Exception as e:
         console.print(f"[bold red]Error updating journey: {e}[/bold red]")
 
-
 def delete_train_journey_by_admin() -> None:
     console.print("[cyan] Delete Train Journey[/cyan]")
+
+    try:
+        from services import schedule as schedule_service
+        from services import train as train_service
+        from services import station as station_service
+    except Exception as e:
+        console.print(f"[bold red] Import error: {e}[/bold red]")
+        return
 
     # ================= LIST SCHEDULES =================
     rows = schedule_service.list_schedules()
@@ -450,15 +457,36 @@ def delete_train_journey_by_admin() -> None:
         console.print("[yellow]No train journeys available[/yellow]")
         return
 
-    schedule_map = {}
+    # ================= LOAD TRAIN DATA =================
+    trains = train_service.list_trains()
+    train_lookup = {
+        t["id"]: f"{t['train_number']} - {t['train_name']}"
+        for t in trains
+    }
 
+    # ================= LOAD STATION DATA =================
+    stations = station_service.list_stations()
+    station_lookup = {
+        s["id"]: f"{s['code']} - {s['name']}"
+        for s in stations
+    }
+
+    schedule_map = {}
     choices = []
 
     for r in rows:
+        train_display = train_lookup.get(r["train_id"], str(r["train_id"]))
+        origin_display = station_lookup.get(
+            r["origin_station_id"], str(r["origin_station_id"])
+        )
+        dest_display = station_lookup.get(
+            r["destination_station_id"], str(r["destination_station_id"])
+        )
+
         display = (
             f"{r['id']} | "
-            f"Train:{r['train_id']} | "
-            f"{r['origin_station_id']} → {r['destination_station_id']} | "
+            f"{train_display} | "
+            f"{origin_display} → {dest_display} | "
             f"{r['departure_date']} {r['departure_time']} → "
             f"{r['arrival_date']} {r['arrival_time']} | ₹{r['fare']}"
         )

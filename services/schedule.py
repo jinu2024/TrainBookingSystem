@@ -152,6 +152,7 @@ def update_schedule(
             raise ValueError("train_id does not exist")
 
         status = train_row.get("status") if isinstance(train_row, dict) else None
+        print(f"Status: {status}")
         if status != "active":
             raise ValueError("train is not active")
 

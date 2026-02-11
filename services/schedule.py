@@ -200,7 +200,6 @@ def get_schedules_by_train(train_id: int) -> list:
     finally:
         connection.close_connection(conn)
 
-
 def delete_schedule(schedule_id: int) -> None:
     """
     Delete schedule entry.

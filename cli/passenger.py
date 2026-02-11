@@ -336,16 +336,13 @@ def book_tickets_dashboard(username: str) -> None:
         from database import connection, queries
         from services.booking import book_ticket
         from services.payments import process_payment
-        from utils.payment_validators import (
-            is_valid_card_number,
-            is_valid_cvv,
-            is_valid_expiry,
-            is_valid_otp,
-        )
+        from utils.validators import is_valid_schedule_date
 
         conn = connection.get_connection()
 
-        # Stations
+        # -----------------------------
+        # SELECT ORIGIN & DESTINATION
+        # -----------------------------
         stations = queries.get_all_stations(conn)
         if not stations:
             messages.show_error("No stations available")
@@ -353,60 +350,131 @@ def book_tickets_dashboard(username: str) -> None:
 
         station_choices = [f"{s['id']} - {s['name']} ({s['city']})" for s in stations]
 
-        origin = questionary.select("Select origin:", choices=station_choices).ask()
-        destination = questionary.select(
-            "Select destination:", choices=station_choices
-        ).ask()
-        if not origin or not destination:
+        origin = questionary.select("Select origin station:", choices=station_choices).ask()
+        if not origin:
+            return
+
+        destination = questionary.select("Select destination station:", choices=station_choices).ask()
+        if not destination:
             return
 
         origin_id = int(origin.split(" - ")[0])
         destination_id = int(destination.split(" - ")[0])
 
-        travel_date = questionary.text("Travel date (YYYY-MM-DD):").ask()
-
-        schedules = queries.find_schedules(conn, origin_id, destination_id, travel_date)
-        if not schedules:
-            messages.show_info("No trains available.")
+        if origin_id == destination_id:
+            messages.show_error("Origin and destination cannot be same")
             return
 
-        train_choices = {
-            f"{s['train_number']} ({s['train_name']}) | "
-            f"{s['departure_time']} → {s['arrival_time']} | Fare ₹{s['fare']}": s
-            for s in schedules
-        }
+        # -----------------------------
+        # VALIDATED DEPARTURE DATE
+        # -----------------------------
+        while True:
+            travel_date = questionary.text("Departure date (YYYY-MM-DD):").ask()
+            if not travel_date:
+                return
+
+            if not is_valid_schedule_date(travel_date):
+                messages.show_error("Invalid date. Must not be past and within 1 year.")
+                continue
+            break
+
+        # -----------------------------
+        # FIND MATCHING SCHEDULES
+        # -----------------------------
+        schedules = queries.find_schedules(conn, origin_id, destination_id, travel_date)
+
+        if not schedules:
+            messages.show_info("No trains available for this route and date.")
+            return
+
+        train_choices = {}
+        for s in schedules:
+            label = (
+                f"{s['train_number']} ({s['train_name']}) | "
+                f"{s['departure_date']} {s['departure_time']} → "
+                f"{s['arrival_date']} {s['arrival_time']} | "
+                f"Fare ₹{s['fare']}"
+            )
+            train_choices[label] = s
 
         selected_label = questionary.select(
             "Select train:", choices=list(train_choices.keys())
         ).ask()
+
         if not selected_label:
             return
 
         selected_schedule = train_choices[selected_label]
+
         train_id = selected_schedule["train_id"]
         fare = selected_schedule["fare"]
+
+        # -----------------------------
+        # CONFIRM JOURNEY DETAILS
+        # -----------------------------
+        console.print(
+            Panel(
+                f"""
+Train        : {selected_schedule['train_number']} - {selected_schedule['train_name']}
+Route        : {origin.split('-')[1].strip()} → {destination.split('-')[1].strip()}
+Departure    : {selected_schedule['departure_date']} {selected_schedule['departure_time']}
+Arrival      : {selected_schedule['arrival_date']} {selected_schedule['arrival_time']}
+Fare         : ₹{fare}
+                """,
+                title="Confirm Journey",
+                style="cyan",
+            )
+        )
 
         if not questionary.confirm("Proceed to payment?").ask():
             return
 
-        # Card validation
-        if not is_valid_card_number(questionary.text("Card Number:").ask()):
-            messages.show_error("Invalid card number")
-            return
-        if not is_valid_expiry(questionary.text("Expiry (MM/YY):").ask()):
-            messages.show_error("Invalid expiry")
-            return
-        if not is_valid_cvv(questionary.password("CVV:").ask()):
-            messages.show_error("Invalid CVV")
-            return
-        if not is_valid_otp(questionary.text("Enter OTP:").ask()):
-            messages.show_error("Invalid OTP")
-            return
+        # ====================================================
+        # 💳 DUMMY PAYMENT VALIDATION SECTION (NEW)
+        # ====================================================
 
-        # Payment
+        DUMMY_CARD = "1111222233334444"
+        DUMMY_EXPIRY = "12/30"
+        DUMMY_CVV = "123"
+        DUMMY_OTP = "0000"
+
+        console.print(
+            Panel(
+                """
+[bold yellow]Demo Card Details:[/bold yellow]
+
+Card Number : 1111222233334444
+Expiry      : 12/30
+CVV         : 123
+OTP         : 0000
+                """,
+                style="yellow",
+            )
+        )
+
+        while True:
+
+            card = questionary.text("Card Number:").ask()
+            expiry = questionary.text("Expiry (MM/YY):").ask()
+            cvv = questionary.password("CVV:").ask()
+            otp = questionary.text("Enter OTP:").ask()
+
+            if (
+                card == DUMMY_CARD
+                and expiry == DUMMY_EXPIRY
+                and cvv == DUMMY_CVV
+                and otp == DUMMY_OTP
+            ):
+                messages.show_success("Payment validated successfully.")
+                break
+            else:
+                messages.show_error("Invalid card details. Try again.")
+
+        # -----------------------------
+        # PROCESS PAYMENT
+        # -----------------------------
         payment = process_payment(amount=fare, method="card")
 
-        # Booking + payment (service handles DB)
         booking = book_ticket(
             username=username,
             train_id=train_id,
@@ -420,11 +488,12 @@ def book_tickets_dashboard(username: str) -> None:
         console.print(
             Panel(
                 f"""
-✅ Payment Successful & Ticket Confirmed!
+✅ Booking Confirmed!
 
 Booking Code : {booking['booking_code']}
 Train        : {booking['train_number']} - {booking['train_name']}
-Date         : {booking['travel_date']}
+Departure    : {selected_schedule['departure_date']} {selected_schedule['departure_time']}
+Arrival      : {selected_schedule['arrival_date']} {selected_schedule['arrival_time']}
 Amount Paid  : ₹{fare}
 
 🎟️ Have a safe journey!
@@ -450,6 +519,10 @@ def booking_history_dashboard(username: str) -> None:
     try:
         bookings = booking.get_booking_history(username)
 
+        if not bookings:
+            messages.show_info("No bookings found.")
+            return
+
         table = Table(show_header=True, header_style="bold cyan")
         table.add_column("Booking Code")
         table.add_column("Train")
@@ -459,22 +532,31 @@ def booking_history_dashboard(username: str) -> None:
         table.add_column("Booking Status")
         table.add_column("Payment Status")
         table.add_column("Txn ID")
+        table.add_column("Action")
+
+        cancellable_bookings = {}
 
         for b in bookings:
-            # Booking status
+
             booking_status = (
                 "[green]CONFIRMED[/green]"
                 if b["booking_status"] == "confirmed"
                 else "[red]CANCELLED[/red]"
             )
 
-            # Payment status (CORRECT LOGIC)
             if b["payment_status"] == "success":
                 payment_status = "[green]SUCCESS[/green]"
             elif b["payment_status"] == "refunded":
                 payment_status = "[yellow]REFUNDED[/yellow]"
             else:
                 payment_status = "-"
+
+            # Action column
+            if b["booking_status"] == "confirmed":
+                action = "[red]Delete[/red]"
+                cancellable_bookings[b["booking_code"]] = b
+            else:
+                action = "-"
 
             table.add_row(
                 b["booking_code"],
@@ -485,12 +567,53 @@ def booking_history_dashboard(username: str) -> None:
                 booking_status,
                 payment_status,
                 b["transaction_id"] or "-",
+                action,
             )
 
         console.print(table)
 
+        # ---------------------------------
+        # Cancel Flow
+        # ---------------------------------
+        if cancellable_bookings:
+
+            selected = questionary.select(
+                "Select booking to delete (or Back):",
+                choices=list(cancellable_bookings.keys()) + ["Back"],
+            ).ask()
+
+            if not selected or selected == "Back":
+                return
+
+            if questionary.confirm(
+                f"Are you sure you want to delete booking {selected}?"
+            ).ask():
+
+                from services.booking import cancel_booking_by_code
+
+                result = cancel_booking_by_code(selected)
+
+                console.print(
+                    Panel(
+                        f"""
+                            [bold green]Booking Cancelled Successfully[/bold green]
+
+                            Original Fare : ₹{result['original_amount']}
+                            Refund Amount : ₹{result['refund_amount']}
+
+                            Deduction     : ₹{result['deduction']}
+
+                            Hours before departure: {result['hours_remaining']} hrs
+                                                    """,
+                        style="green",
+                    )
+                )
+
     except ValueError as e:
         messages.show_warning(str(e))
+
+    except Exception as e:
+        messages.show_error(str(e))
 
 
 def profile_dashboard(username: str) -> None:

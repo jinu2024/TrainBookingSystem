@@ -7,7 +7,12 @@ from rich.table import Table
 
 from ui import messages
 from services import booking, user as user_service
-from utils.__helper import ask_required, ask_with_validation, does_user_exist, get_optional_validated_input
+from utils.__helper import (
+    ask_required,
+    ask_with_validation,
+    does_user_exist,
+    get_optional_validated_input,
+)
 from utils.validators import (
     is_strong_password,
     is_valid_aadhaar,
@@ -37,9 +42,11 @@ def register_customer(
     try:
         if interactive:
             username = ask_required(
-                "Username:", validator=lambda x: does_user_exist(x, user_service.get_all_users()), error_msg="Username already exists"
+                "Username:",
+                validator=lambda x: does_user_exist(x, user_service.get_all_users()),
+                error_msg="Username already exists",
             )
-            
+
             full_name = ask_required("Full name:")
 
             dob = ask_with_validation(
@@ -68,13 +75,13 @@ def register_customer(
             mobile = get_optional_validated_input(
                 "Mobile (optional):",
                 is_valid_mobile_number,
-                "Invalid mobile number format"
+                "Invalid mobile number format",
             )
 
             aadhaar = get_optional_validated_input(
                 "Aadhaar (optional):",
                 is_valid_aadhaar,
-                "Invalid Aadhaar format (12 digits only)"
+                "Invalid Aadhaar format (12 digits only)",
             )
 
             nationality = questionary.text("Nationality (optional):").ask()

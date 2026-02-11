@@ -54,35 +54,24 @@ def main_menu() -> None:
                 messages.show_error(str(exc))
         elif choice == "Sign in":
             try:
+                # single sign-in page for both admin and passenger
                 identifier = ask_required("Username or Email:")
 
-                action = questionary.select(
-                    "Choose an option:",
-                    choices=["Enter Password", "Forgot Password?"],
-                ).ask()
-
-                if action == "Forgot Password?":
-                    passenger_cli.reset_password()
-                    continue
-
                 password = questionary.password("Password:").ask()
-
                 user = user_service.authenticate_user(identifier, password)
                 role = user.get("role")
-
                 if role == "admin":
                     admin_cli.admin_dashboard(user.get("username"))
                 else:
+                    # create a session for customers (24h TTL) and pass token to dashboard
                     from services import session as session_service
 
                     token = session_service.create_session_for_user(user.get("id"))
                     passenger_cli.passenger_dashboard(
                         user.get("username"), session_token=token
                     )
-
             except Exception as exc:
                 messages.show_error(str(exc))
-
         elif choice == "Exit":
             console.print("Goodbye.")
             sys.exit(0)

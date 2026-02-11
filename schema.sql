@@ -3,7 +3,7 @@
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
-    email TEXT,
+    email TEXT NOT NULL UNIQUE,
     mobile TEXT,
     password_hash TEXT NOT NULL,
     role TEXT CHECK(role IN ('admin', 'customer')) NOT NULL,
@@ -20,6 +20,10 @@ CREATE TABLE IF NOT EXISTS users (
     UNIQUE(mobile),
     UNIQUE(aadhaar)
 );
+
+-- Auto add admin user
+INSERT OR IGNORE INTO users (username, email, mobile, password_hash, role, full_name, dob) VALUES
+('admin', 'admin@tcs.com', '9876543210', '7676aaafb027c825bd9abab78b234070e702752f625b752e55e55b48e607e358', 'admin', 'Admin User', '1990-01-01');
 
 -- STATIONS
 CREATE TABLE IF NOT EXISTS stations (

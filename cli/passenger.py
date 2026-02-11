@@ -7,35 +7,162 @@ from rich.table import Table
 
 from ui import messages
 from services import booking
+from utils.validators import (
+    is_strong_password,
+    is_valid_aadhaar,
+    is_valid_date_of_birth,
+    is_valid_email,
+    is_valid_mobile_number,
+)
 
 
-def register_customer(interactive: bool = True, username: str | None = None, email: str | None = None, password: str | None = None, full_name: str | None = None, dob: str | None = None, gender: str | None = None, mobile: str | None = None, aadhaar: str | None = None, nationality: str | None = None, address: str | None = None) -> dict:
-    """Register a new customer (passenger).
+def ask_required(prompt: str, password: bool = False):
+    """Safe questionary input that exits immediately on Ctrl+C"""
+    try:
+        if password:
+            value = questionary.password(prompt).ask()
+        else:
+            value = questionary.text(prompt).ask()
 
-    Mirrors the admin registration flow but uses `create_customer` service.
+        if value is None:  # Ctrl+C or ESC
+            raise KeyboardInterrupt
+
+        return value
+
+    except KeyboardInterrupt:
+        console = Console()
+        console.print("\n[bold red]Registration cancelled. Exiting...[/bold red]")
+        raise SystemExit
+
+
+def ask_with_validation(
+    prompt: str,
+    validator=lambda x: True,
+    error_msg: str = "Invalid input",
+    password: bool = False,
+    attempts: int = 3,
+):
+    """
+    Ask input with validation + retry.
+    Returns valid value or exits after max attempts.
     """
     console = Console()
-    console.print(Panel("Passenger Registration", style="bold blue", expand=False))
+    for i in range(attempts):
+        value = ask_required(prompt, password=password)
 
-    if interactive:
-        username = questionary.text("Username:").ask()
-        full_name = questionary.text("Full name:").ask()
-        dob = questionary.text("Date of birth (YYYY-MM-DD):").ask()
-        gender = questionary.select("Gender:", choices=["male", "female", "other"]).ask()
-        email = questionary.text("Email (optional if mobile provided):").ask()
-        mobile = questionary.text("Mobile (optional if email provided):").ask()
-        aadhaar = questionary.text("Aadhaar number (optional):").ask()
-        nationality = questionary.text("Nationality (optional):").ask()
-        address = questionary.text("Address (optional):").ask()
-        password = questionary.password("Password (min 8 chars):").ask()
+        # allow empty (for optional fields)
+        if value == "" or value is None:
+            return value
+
+        if validator(value):
+            return value
+
+        remaining = attempts - i - 1
+
+        if remaining > 0:
+            console.print(
+                f"[bold red]{error_msg}[/bold red] ({remaining} attempts left)"
+            )
+        else:
+            console.print(
+                "[bold red]Too many invalid attempts. Registration cancelled.[/bold red]"
+            )
+            return None
+
+
+def register_customer(
+    interactive: bool = True,
+    username: str | None = None,
+    email: str | None = None,
+    password: str | None = None,
+    full_name: str | None = None,
+    dob: str | None = None,
+    gender: str | None = None,
+    mobile: str | None = None,
+    aadhaar: str | None = None,
+    nationality: str | None = None,
+    address: str | None = None,
+) -> dict:
+    console = Console()
+
+    # console.print("[bold blue]Create new Account[/bold blue]\n")
 
     try:
+        if interactive:
+            username = ask_required("Username:")
+            full_name = ask_required("Full name:")
+
+            dob = ask_with_validation(
+                "Date of birth (YYYY-MM-DD):",
+                validator=is_valid_date_of_birth,
+                error_msg="DOB must be YYYY-MM-DD and age ≥ 16",
+            )
+            if not dob:
+                return
+
+            gender = questionary.select(
+                "Gender:",
+                choices=["male", "female", "other"],
+            ).ask()
+            if gender is None:
+                return
+
+            email = ask_with_validation(
+                "Email:",
+                validator=is_valid_email,
+                error_msg="Invalid email format",
+            )
+            if not email:
+                return
+
+            mobile = ask_with_validation(
+                "Mobile (optional):",
+                validator=is_valid_mobile_number,
+                error_msg="Mobile must be 10 digits starting with 6,7,8,9",
+            )
+            if mobile is None:
+                return
+
+            aadhaar = ask_with_validation(
+                "Aadhaar (optional):",
+                validator=is_valid_aadhaar,
+                error_msg="Aadhaar must contain only digits and 12 digits long",
+            )
+            if aadhaar is None:
+                return
+
+            nationality = ask_required("Nationality (optional):")
+            address = ask_required("Address (optional):")
+
+            messages.show_info(
+                "Create a strong password mixed of special characters, numbers, upper and lower alphabets. 8-16 chars."
+            )
+
+            password = ask_with_validation(
+                "Password:",
+                validator=is_strong_password,
+                error_msg="Password must be 8-16 chars with uppercase, lowercase, digit, and special character",
+                password=True,
+            )
+            confirm_password = ask_with_validation(
+                "Confirm password:",
+                validator=is_strong_password,
+                error_msg="Password must be 8-16 chars with uppercase, lowercase, digit, and special character",
+                password=True,
+            )
+
+            if password != confirm_password:
+                console.print("[bold red]Passwords do not match[/bold red]")
+                return
+
         from services.user import create_customer
 
+        print(f"aadhar :{aadhaar}")
+
         result = create_customer(
-            username,
-            email,
-            password,
+            username=username,
+            email=email,
+            password=password,
             full_name=full_name,
             dob=dob,
             gender=gender,
@@ -44,12 +171,13 @@ def register_customer(interactive: bool = True, username: str | None = None, ema
             nationality=nationality,
             address=address,
         )
-        messages.show_success(f"Welcome, '{result['username']}'. Your account has been created.")
-        return result
-    except Exception as exc:
-        messages.show_error(str(exc))
-        raise
 
+        messages.show_success(f"Welcome, '{result['username']}'!")
+        return result
+
+    except KeyboardInterrupt:
+        console.print("\n[bold red]Registration cancelled. Exiting...[/bold red]")
+        raise SystemExit
 
 
 def passenger_dashboard(username: str, session_token: str | None = None) -> None:
@@ -147,7 +275,13 @@ def manage_passengers(user_id: int) -> None:
     from services import user as user_service
 
     while True:
-        choices = ["List passengers", "Add passenger", "Edit passenger", "Remove passenger", "Back"]
+        choices = [
+            "List passengers",
+            "Add passenger",
+            "Edit passenger",
+            "Remove passenger",
+            "Back",
+        ]
         action = questionary.select("Passenger manager:", choices=choices).ask()
         if action == "Back" or not action:
             return
@@ -159,12 +293,19 @@ def manage_passengers(user_id: int) -> None:
                     messages.show_info("No passengers saved yet.")
                 else:
                     for idx, p in enumerate(lst, start=1):
-                        console.print(Panel(f"{idx}. {p.get('name','<no-name>')} — {p.get('dob','')}", title=str(idx)))
+                        console.print(
+                            Panel(
+                                f"{idx}. {p.get('name','<no-name>')} — {p.get('dob','')}",
+                                title=str(idx),
+                            )
+                        )
 
             elif action == "Add passenger":
                 name = questionary.text("Name:").ask()
                 dob = questionary.text("Date of birth (YYYY-MM-DD):").ask()
-                gender = questionary.select("Gender:", choices=["male", "female", "other"]).ask()
+                gender = questionary.select(
+                    "Gender:", choices=["male", "female", "other"]
+                ).ask()
                 aadhaar = questionary.text("Aadhaar (optional):").ask()
                 mobile = questionary.text("Mobile (optional):").ask()
                 passenger = {
@@ -182,18 +323,38 @@ def manage_passengers(user_id: int) -> None:
                 if not lst:
                     messages.show_info("No passengers to edit.")
                     continue
-                choices_idx = [f"{i+1}. {p.get('name','<no-name>')}" for i, p in enumerate(lst)]
-                sel = questionary.select("Select passenger to edit:", choices=choices_idx).ask()
+                choices_idx = [
+                    f"{i+1}. {p.get('name','<no-name>')}" for i, p in enumerate(lst)
+                ]
+                sel = questionary.select(
+                    "Select passenger to edit:", choices=choices_idx
+                ).ask()
                 if not sel:
                     continue
                 idx = int(sel.split(".")[0]) - 1
                 existing = lst[idx]
-                name = questionary.text("Name:", default=existing.get("name","")).ask()
-                dob = questionary.text("Date of birth (YYYY-MM-DD):", default=existing.get("dob","")).ask()
-                gender = questionary.select("Gender:", choices=["male", "female", "other"], default=existing.get("gender","male")).ask()
-                aadhaar = questionary.text("Aadhaar (optional):", default=existing.get("aadhaar","")).ask()
-                mobile = questionary.text("Mobile (optional):", default=existing.get("mobile","")).ask()
-                passenger = {"name": name, "dob": dob, "gender": gender, "aadhaar": aadhaar, "mobile": mobile}
+                name = questionary.text("Name:", default=existing.get("name", "")).ask()
+                dob = questionary.text(
+                    "Date of birth (YYYY-MM-DD):", default=existing.get("dob", "")
+                ).ask()
+                gender = questionary.select(
+                    "Gender:",
+                    choices=["male", "female", "other"],
+                    default=existing.get("gender", "male"),
+                ).ask()
+                aadhaar = questionary.text(
+                    "Aadhaar (optional):", default=existing.get("aadhaar", "")
+                ).ask()
+                mobile = questionary.text(
+                    "Mobile (optional):", default=existing.get("mobile", "")
+                ).ask()
+                passenger = {
+                    "name": name,
+                    "dob": dob,
+                    "gender": gender,
+                    "aadhaar": aadhaar,
+                    "mobile": mobile,
+                }
                 updated = user_service.update_passenger(user_id, idx, passenger)
                 messages.show_success(f"Passenger updated. Total now: {len(updated)}")
 
@@ -202,8 +363,12 @@ def manage_passengers(user_id: int) -> None:
                 if not lst:
                     messages.show_info("No passengers to remove.")
                     continue
-                choices_idx = [f"{i+1}. {p.get('name','<no-name>')}" for i, p in enumerate(lst)]
-                sel = questionary.select("Select passenger to remove:", choices=choices_idx).ask()
+                choices_idx = [
+                    f"{i+1}. {p.get('name','<no-name>')}" for i, p in enumerate(lst)
+                ]
+                sel = questionary.select(
+                    "Select passenger to remove:", choices=choices_idx
+                ).ask()
                 if not sel:
                     continue
                 idx = int(sel.split(".")[0]) - 1
@@ -239,12 +404,12 @@ def book_tickets_dashboard(username: str) -> None:
             messages.show_error("No stations available")
             return
 
-        station_choices = [
-            f"{s['id']} - {s['name']} ({s['city']})" for s in stations
-        ]
+        station_choices = [f"{s['id']} - {s['name']} ({s['city']})" for s in stations]
 
         origin = questionary.select("Select origin:", choices=station_choices).ask()
-        destination = questionary.select("Select destination:", choices=station_choices).ask()
+        destination = questionary.select(
+            "Select destination:", choices=station_choices
+        ).ask()
         if not origin or not destination:
             return
 
@@ -372,7 +537,7 @@ def booking_history_dashboard(username: str) -> None:
                 f'₹{b["fare"]}',
                 booking_status,
                 payment_status,
-                b["transaction_id"] or "-"
+                b["transaction_id"] or "-",
             )
 
         console.print(table)
@@ -391,8 +556,6 @@ def help_dashboard(username: str) -> None:
     console = Console()
     console.print(Panel("Passenger Help", style="bold yellow"))
     messages.show_info("Help is not available yet.")
-
-
 
 
 if __name__ == "__main__":

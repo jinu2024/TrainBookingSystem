@@ -3,11 +3,11 @@ from datetime import datetime, date
 
 
 def is_valid_email(email: str) -> bool:
-	# Simple regex validation for discoverable patterns in this repo
-	if not email or '@' not in email:
-		return False
-	# Basic RFC-like validation (not exhaustive)
-	return re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email) is not None
+    # Simple regex validation for discoverable patterns in this repo
+    if not email or "@" not in email:
+        return False
+    # Basic RFC-like validation (not exhaustive)
+    return re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email) is not None
 
 
 def is_strong_password(password: str) -> bool:
@@ -30,7 +30,6 @@ def is_strong_password(password: str) -> bool:
     return all([has_upper, has_lower, has_digit, has_special])
 
 
-
 def is_valid_date_of_birth(dob: str) -> bool:
     """
     Validate date of birth:
@@ -48,8 +47,10 @@ def is_valid_date_of_birth(dob: str) -> bool:
     today = date.today()
 
     # Calculate age
-    age = today.year - birth_date.year - (
-        (today.month, today.day) < (birth_date.month, birth_date.day)
+    age = (
+        today.year
+        - birth_date.year
+        - ((today.month, today.day) < (birth_date.month, birth_date.day))
     )
 
     return age >= 16
@@ -81,6 +82,7 @@ def is_valid_schedule_date(travel_date: str) -> bool:
 
     return schedule_date <= one_year_later
 
+
 def is_valid_mobile_number(mobile: str) -> bool:
     """
     Validate Indian mobile number:
@@ -91,3 +93,15 @@ def is_valid_mobile_number(mobile: str) -> bool:
         return False
 
     return re.match(r"^[6-9]\d{9}$", mobile) is not None
+
+
+def is_valid_aadhaar(aadhaar: str) -> bool:
+    """
+    Validate Aadhaar number:
+    - Must be exactly 12 digits
+    - Must contain only digits
+    """
+    if not isinstance(aadhaar, str):
+        return False
+
+    return re.match(r"^\d{12}$", aadhaar) is not None

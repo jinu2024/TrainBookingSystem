@@ -254,7 +254,7 @@ def update_schedule(
             destination_station_id = ?,
             departure_time = ?,
             arrival_time = ?,
-            travel_date = ?
+            travel_date = ?,
             fare = ?
         WHERE id = ?
         """,

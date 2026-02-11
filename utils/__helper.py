@@ -90,3 +90,10 @@ def ask_with_validation(
                 "[bold red]Too many invalid attempts. Registration cancelled.[/bold red]"
             )
             return None
+
+
+def does_user_exist(username: str, results) -> bool:
+    """
+    Check if a user with the given username already exists.
+    """
+    return not any(user["username"] == username for user in results)

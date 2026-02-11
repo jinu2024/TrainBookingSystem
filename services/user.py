@@ -3,16 +3,30 @@
 Keep logic side-effect free where possible; database operations are delegated to
 `database/queries.py` via `database/connection.py`.
 """
+
 from __future__ import annotations
 from typing import Optional
 
 from database import connection, queries
 from utils.validators import is_valid_email, is_strong_password
-from utils.security import hash_password,verify_password
+from utils.security import hash_password, verify_password
 import json
 
 
-def create_admin(username: str, email: str, password: str, *, full_name: str | None = None, dob: str | None = None, gender: str | None = None, mobile: str | None = None, aadhaar: str | None = None, nationality: str | None = None, address: str | None = None, passengers: str | None = None) -> dict:
+def create_admin(
+    username: str,
+    email: str,
+    password: str,
+    *,
+    full_name: str | None = None,
+    dob: str | None = None,
+    gender: str | None = None,
+    mobile: str | None = None,
+    aadhaar: str | None = None,
+    nationality: str | None = None,
+    address: str | None = None,
+    passengers: str | None = None,
+) -> dict:
     """Create an admin user.
 
     Returns a dict with `id` and `username` on success.
@@ -54,7 +68,20 @@ def create_admin(username: str, email: str, password: str, *, full_name: str | N
         connection.close_connection(conn)
 
 
-def create_customer(username: str, email: str | None, password: str, *, full_name: str | None = None, dob: str | None = None, gender: str | None = None, mobile: str | None = None, aadhaar: str | None = None, nationality: str | None = None, address: str | None = None, passengers: str | None = None) -> dict:
+def create_customer(
+    username: str,
+    email: str | None,
+    password: str,
+    *,
+    full_name: str | None = None,
+    dob: str | None = None,
+    gender: str | None = None,
+    mobile: str | None = None,
+    aadhaar: str | None = None,
+    nationality: str | None = None,
+    address: str | None = None,
+    passengers: str | None = None,
+) -> dict:
     """Create a customer user.
 
     Same validation rules as admin, but role is 'customer'.
@@ -282,5 +309,14 @@ def remove_passenger(user_id: int, index: int) -> list:
         lst.pop(index)
         queries.save_passengers_for_user(conn, user_id, json.dumps(lst))
         return lst
+    finally:
+        connection.close_connection(conn)
+
+
+def get_all_users() -> list[dict]:
+    """Return a list of all users (customer) in the system."""
+    conn = connection.get_connection()
+    try:
+        return queries.get_all_users(conn)
     finally:
         connection.close_connection(conn)

@@ -25,6 +25,13 @@ def init_db():
 # USER QUERIES
 
 
+def get_all_users(conn):
+    """Return a list of all users (customer) in the system."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE role = 'customer'")
+    return cursor.fetchall()
+
+
 def create_user(
     conn,
     username,

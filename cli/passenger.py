@@ -6,8 +6,8 @@ from rich.panel import Panel
 from rich.table import Table
 
 from ui import messages
-from services import booking
-from utils.__helper import ask_required, ask_with_validation
+from services import booking, user as user_service
+from utils.__helper import ask_required, ask_with_validation, does_user_exist
 from utils.validators import (
     is_strong_password,
     is_valid_aadhaar,
@@ -36,7 +36,10 @@ def register_customer(
 
     try:
         if interactive:
-            username = ask_required("Username:")
+            username = ask_required(
+                "Username:", validator=lambda x: not does_user_exist(x, user_service.get_all_users()), error_msg="Username already exists"
+            )
+            
             full_name = ask_required("Full name:")
 
             dob = ask_with_validation(
@@ -164,7 +167,6 @@ def passenger_dashboard(username: str, session_token: str | None = None) -> None
                 messages.show_error(f"Failed to download ticket: {exc}")
             continue
 
-
         if choice == "Logout":
             # invalidate session if present
             if session_token:
@@ -208,11 +210,15 @@ def book_tickets_dashboard(username: str) -> None:
 
         station_choices = [f"{s['id']} - {s['name']} ({s['city']})" for s in stations]
 
-        origin = questionary.select("Select origin station:", choices=station_choices).ask()
+        origin = questionary.select(
+            "Select origin station:", choices=station_choices
+        ).ask()
         if not origin:
             return
 
-        destination = questionary.select("Select destination station:", choices=station_choices).ask()
+        destination = questionary.select(
+            "Select destination station:", choices=station_choices
+        ).ask()
         if not destination:
             return
 
@@ -914,9 +920,7 @@ def download_ticket_dashboard(username: str) -> None:
             return
 
         # Only confirmed bookings allowed
-        confirmed_bookings = [
-            b for b in bookings if b["booking_status"] == "confirmed"
-        ]
+        confirmed_bookings = [b for b in bookings if b["booking_status"] == "confirmed"]
 
         if not confirmed_bookings:
             messages.show_info("No confirmed bookings available for download.")

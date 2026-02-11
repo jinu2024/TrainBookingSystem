@@ -239,9 +239,10 @@ def update_schedule(
     train_id,
     origin_id,
     dest_id,
+    dep_date,
+    arr_date,
     dep_time,
     arr_time,
-    travel_date,
     fare,
 ):
     cursor = conn.cursor()
@@ -249,22 +250,25 @@ def update_schedule(
     cursor.execute(
         """
         UPDATE schedules
-        SET train_id = ?,
-            origin_station_id = ?,
-            destination_station_id = ?,
-            departure_time = ?,
-            arrival_time = ?,
-            travel_date = ?,
-            fare = ?
-        WHERE id = ?
+        SET
+            train_id=?,
+            origin_station_id=?,
+            destination_station_id=?,
+            departure_date=?,
+            arrival_date=?,
+            departure_time=?,
+            arrival_time=?,
+            fare=?
+        WHERE id=?;
         """,
         (
             train_id,
             origin_id,
             dest_id,
+            dep_date,
+            arr_date,
             dep_time,
             arr_time,
-            travel_date,
             fare,
             schedule_id,
         ),
@@ -336,6 +340,21 @@ def get_schedules_by_train(conn, train_id):
         (train_id,),
     )
     return cur.fetchall()
+
+
+def delete_schedule(conn, schedule_id):
+    """
+    Delete schedule entry.
+    """
+    cur = conn.cursor()
+    cur.execute(
+        """
+        DELETE FROM schedules
+        WHERE id = ?
+        """,
+        (schedule_id,),
+    )
+    conn.commit()
 
 
 # -------------------------
@@ -507,6 +526,7 @@ def get_bookings_by_user(conn, user_id):
     )
     return cur.fetchall()
 
+
 def create_payment(
     conn,
     booking_id: int,
@@ -577,4 +597,3 @@ def refund_payment_by_booking_id(conn, booking_id):
         (booking_id,),
     )
     conn.commit()
-

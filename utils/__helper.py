@@ -2,23 +2,59 @@ import questionary
 from rich.console import Console
 
 
-def ask_required(prompt: str, password: bool = False):
-    """Safe questionary input that exits immediately on Ctrl+C"""
-    try:
-        if password:
-            value = questionary.password(prompt).ask()
-        else:
-            value = questionary.text(prompt).ask()
+import questionary
+from rich.console import Console
 
-        if value is None:  # Ctrl+C or ESC
-            raise KeyboardInterrupt
+console = Console()
 
-        return value
 
-    except KeyboardInterrupt:
-        console = Console()
-        console.print("\n[bold red]Registration cancelled. Exiting...[/bold red]")
-        raise SystemExit
+def ask_required(
+    prompt: str,
+    password: bool = False,
+    attempts: int = 3,
+    validator=None,
+    error_msg: str = "Invalid input. Try again.",
+):
+    """
+    Safe questionary input with:
+    - Required value
+    - Retry attempts
+    - Optional validator function
+    - Ctrl+C safe exit
+    """
+
+    for _ in range(attempts):
+        try:
+            # Ask input
+            value = (
+                questionary.password(prompt).ask()
+                if password
+                else questionary.text(prompt).ask()
+            )
+
+            if value is None:  # Ctrl+C or ESC
+                raise KeyboardInterrupt
+
+            value = value.strip()
+
+            # Required check
+            if not value:
+                console.print("[yellow]Input cannot be empty[/yellow]")
+                continue
+
+            # Custom validator
+            if validator and not validator(value):
+                console.print(f"[red]{error_msg}[/red]")
+                continue
+
+            return value
+
+        except KeyboardInterrupt:
+            console.print("\n[bold red]Operation cancelled. Exiting...[/bold red]")
+            raise SystemExit
+
+    console.print("[bold red]Too many failed attempts. Exiting...[/bold red]")
+    raise SystemExit
 
 
 def ask_with_validation(

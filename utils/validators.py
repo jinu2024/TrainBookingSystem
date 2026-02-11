@@ -133,7 +133,7 @@ def is_valid_station_code(station_code: str) -> bool:
 
     station_code = station_code.strip().upper()
 
-    return bool(re.fullmatch(r"[A-Z0-9]{6}", station_code))
+    return bool(re.fullmatch(r"(?=.*[A-Z])[A-Z0-9]{6}", station_code))
 
 
 def is_valid_time(t: str) -> bool:

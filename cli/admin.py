@@ -11,6 +11,14 @@ from rich.table import Table
 from services import user as user_service
 from services import train as train_service
 from ui import messages
+from utils.__helper import ask_required, ask_required, ask_with_validation
+from utils.validators import (
+    is_valid_station_code,
+    is_valid_train_number,
+    is_valid_schedule_date,
+    is_valid_time,
+    is_valid_fare,
+)
 
 console = Console()
 
@@ -84,8 +92,17 @@ def admin_dashboard(username: str) -> None:
 
 def admin_train_registration() -> None:
     console.print("[cyan] Admin Train Registration[/cyan]")
-    train_number = questionary.text("Train Number (6 char):").ask()
-    train_name = questionary.text("Train Name:").ask()
+    train_number = ask_with_validation(
+        "Train Number (6 digits):",
+        validator=is_valid_train_number,
+        error_msg="Train Number must be exactly 6 digits",
+        attempts=3,
+    )
+
+    if train_number is None:
+        return
+
+    train_name = ask_required("Train Name:")
 
     try:
         train_service.add_train(train_number, train_name)
@@ -96,9 +113,19 @@ def admin_train_registration() -> None:
 
 def admin_add_station() -> None:
     console.print("[cyan] Add Station[/cyan]")
-    code = questionary.text("Station code (6 char):").ask()
-    name = questionary.text("Station name:").ask()
-    city = questionary.text("City:").ask()
+    messages.show_info(
+        "Station Code must be exactly 6 characters (uppercase letters and digits)"
+    )
+    code = ask_with_validation(
+        "Station Code (6 characters):",
+        validator=is_valid_station_code,
+        error_msg="Station Code must be exactly 6 characters (uppercase letters and digits)",
+        attempts=3,
+    )
+    if code is None:
+        return
+    name = ask_required("Station name:")
+    city = ask_required("City:")
 
     try:
         # import station service lazily to avoid circular imports
@@ -113,6 +140,10 @@ def admin_add_station() -> None:
 def admin_schedule_new_train_jouney() -> None:
     console.print("[cyan] Schedule New Train Journey[/cyan]")
 
+    from datetime import datetime
+    from services import station as station_service
+    from services import schedule as schedule_service
+
     # ================= TRAINS =================
     rows = train_service.list_trains()
     if not rows:
@@ -123,9 +154,8 @@ def admin_schedule_new_train_jouney() -> None:
     train_choices = []
 
     for r in rows:
-        tid = r["id"]
-        display = f"{tid} - {r['train_number']} - {r['train_name']}"
-        train_map[display] = tid
+        display = f"{r['id']} - {r['train_number']} - {r['train_name']}"
+        train_map[display] = r["id"]
         train_choices.append(display)
 
     train_choice = questionary.select("Select train:", choices=train_choices).ask()
@@ -135,8 +165,6 @@ def admin_schedule_new_train_jouney() -> None:
     train_id = train_map[train_choice]
 
     # ================= STATIONS =================
-    from services import station as station_service
-
     stations = station_service.list_stations()
 
     station_map = {}
@@ -147,103 +175,91 @@ def admin_schedule_new_train_jouney() -> None:
         station_map[display] = s["id"]
         station_choices.append(display)
 
-    origin_choice = questionary.select(
-        "Select origin station:", choices=station_choices
-    ).ask()
-    origin_id = station_map[origin_choice]
+    origin_choice = questionary.select("Origin station:", choices=station_choices).ask()
+    if not origin_choice:
+        return
 
     dest_choice = questionary.select(
-        "Select destination station:",
+        "Destination station:",
         choices=[c for c in station_choices if c != origin_choice],
     ).ask()
+    if not dest_choice:
+        return
+
+    origin_id = station_map[origin_choice]
     dest_id = station_map[dest_choice]
 
-    # ================= SMART SUGGESTIONS =================
-    from services import schedule as schedule_service
-
-    schedules = schedule_service.list_schedules()
-
-    existing_dates = set()
-    existing_dep = set()
-    existing_arr = set()
-
-    for s in schedules:
-        if s["train_id"] == train_id:
-            existing_dates.add(s["travel_date"])
-            existing_dep.add(s["departure_time"])
-            existing_arr.add(s["arrival_time"])
-
-    console.print("\n[yellow]Select from existing or choose manual entry[/yellow]\n")
-
-    # ---------- DATE ----------
-    date_choice = questionary.select(
-        "Travel Date:",
-        choices=sorted(existing_dates) + ["<Enter new date>"],
-    ).ask()
-
-    if date_choice == "<Enter new date>":
-        travel_date = questionary.text("Enter new date (YYYY-MM-DD):").ask()
-    else:
-        travel_date = date_choice
-
-    # ---------- DEPARTURE ----------
-    dep_choice = questionary.select(
-        "Departure Time:",
-        choices=sorted(existing_dep) + ["<Enter new time>"],
-    ).ask()
-
-    if dep_choice == "<Enter new time>":
-        departure_time = questionary.text("Enter departure (HH:MM):").ask()
-    else:
-        departure_time = dep_choice
-
-    # ---------- ARRIVAL ----------
-    arr_choice = questionary.select(
-        "Arrival Time:",
-        choices=sorted(existing_arr) + ["<Enter new time>"],
-    ).ask()
-
-    if arr_choice == "<Enter new time>":
-        arrival_time = questionary.text("Enter arrival (HH:MM):").ask()
-    else:
-        arrival_time = arr_choice
-
-    # ================= VALIDATION =================
-    from datetime import datetime
-
-    try:
-        datetime.strptime(travel_date, "%Y-%m-%d")
-        datetime.strptime(departure_time, "%H:%M")
-        datetime.strptime(arrival_time, "%H:%M")
-    except Exception:
-        console.print("[bold red]Invalid date/time format[/bold red]")
+    # ================= INPUTS =================
+    departure_date = ask_with_validation(
+        "Departure Date (YYYY-MM-DD):",
+        validator=is_valid_schedule_date,
+        error_msg="Invalid schedule date",
+        attempts=3,
+    )
+    if departure_date is None:
         return
 
-    fare_input = questionary.text("Fare amount (₹):").ask()
-    if not fare_input:
-        console.print("[yellow]Operation cancelled[/yellow]")
+    arrival_date = ask_with_validation(
+        "Arrival Date (YYYY-MM-DD):",
+        validator=is_valid_schedule_date,
+        error_msg="Invalid schedule date",
+        attempts=3,
+    )
+    if arrival_date is None:
         return
 
-    try:
-        fare = float(fare_input)
-        if fare <= 0:
-            raise ValueError
-    except Exception:
-        console.print("[bold red]Invalid fare. Enter a positive number[/bold red]")
+    departure_time = ask_with_validation(
+        "Departure Time (HH:MM):",
+        validator=is_valid_time,
+        error_msg="Invalid time format",
+        attempts=3,
+    )
+    if departure_time is None:
         return
 
+    arrival_time = ask_with_validation(
+        "Arrival Time (HH:MM):",
+        validator=is_valid_time,
+        error_msg="Invalid time format",
+        attempts=3,
+    )
+    if arrival_time is None:
+        return
+
+    fare_input = ask_with_validation(
+        "Fare amount (₹):",
+        validator=is_valid_fare,
+        error_msg="Fare must be positive number",
+        attempts=3,
+    )
+    if fare_input is None:
+        return
+
+    fare = float(fare_input)
+
+    # ================= FINAL VALIDATION =================
+    dep_dt = datetime.strptime(f"{departure_date} {departure_time}", "%Y-%m-%d %H:%M")
+    arr_dt = datetime.strptime(f"{arrival_date} {arrival_time}", "%Y-%m-%d %H:%M")
+
+    if arr_dt <= dep_dt:
+        messages.show_error("Arrival must be after departure.")
+        return
+
+    # ================= SAVE =================
     try:
         sched_id = schedule_service.create_schedule(
-            train_id,
-            origin_id,
-            dest_id,
-            travel_date,
-            departure_time,
-            arrival_time,
-            fare,
+            train_id=train_id,
+            origin_id=origin_id,
+            dest_id=dest_id,
+            departure_date=departure_date,
+            arrival_date=arrival_date,
+            departure_time=departure_time,
+            arrival_time=arrival_time,
+            fare=fare,
         )
+
         console.print(
-            f"[bold green]Schedule created (id={sched_id}, Fare=₹{fare})[/bold green]"
+            f"[bold green]Schedule created successfully (id={sched_id})[/bold green]"
         )
 
     except Exception as e:

@@ -105,3 +105,47 @@ def is_valid_aadhaar(aadhaar: str) -> bool:
         return False
 
     return re.match(r"^\d{12}$", aadhaar) is not None
+
+
+def is_valid_train_number(train_number: str) -> bool:
+    """
+    Validate train number:
+    - Must be exactly 6 digits
+    - Must contain only digits
+    """
+    if not isinstance(train_number, str):
+        return False
+
+    return re.match(r"^\d{6}$", train_number) is not None
+
+
+def is_valid_station_code(station_code: str) -> bool:
+    """
+    Validate station code:
+    - exactly 6 characters
+    - uppercase letters + digits only
+    - trims spaces
+    - auto converts lowercase to uppercase
+    """
+
+    if not isinstance(station_code, str):
+        return False
+
+    station_code = station_code.strip().upper()
+
+    return bool(re.fullmatch(r"[A-Z0-9]{6}", station_code))
+
+
+def is_valid_time(t: str) -> bool:
+    try:
+        datetime.strptime(t, "%H:%M")
+        return True
+    except Exception:
+        return False
+
+
+def is_valid_fare(f: str) -> bool:
+    try:
+        return float(f) > 0
+    except Exception:
+        return False

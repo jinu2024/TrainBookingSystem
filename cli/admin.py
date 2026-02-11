@@ -14,6 +14,7 @@ from ui import messages
 
 console = Console()
 
+
 def admin_dashboard(username: str) -> None:
     """Admin dashboard — opens a connection and runs admin actions until logout.
 
@@ -612,11 +613,3 @@ def admin_view_train_route_by_train() -> None:
 
     except Exception as e:
         console.print(f"[bold red] Error Viewing Train Routes: {e}[/bold red]")
-
-
-if __name__ == "__main__":
-    # When run as script, go interactive
-    try:
-        register_admin()
-    except Exception:
-        pass

@@ -97,3 +97,26 @@ def does_user_exist(username: str, results) -> bool:
     Check if a user with the given username already exists.
     """
     return not any(user["username"] == username for user in results)
+
+
+def get_optional_validated_input(prompt, validator_func, error_msg, max_attempts=3):
+    attempts = 0
+
+    while attempts < max_attempts:
+        value = questionary.text(prompt).ask()
+
+        # If user leaves empty → allow immediately
+        if not value:
+            return None
+
+        value = value.strip()
+
+        if validator_func(value):
+            return value
+
+        attempts += 1
+        console.print(f"[red]{error_msg} ({attempts}/{max_attempts})[/red]")
+
+    # After 3 failed attempts
+    console.print("[bold red]Too many invalid attempts. Returning...[/bold red]")
+    return None

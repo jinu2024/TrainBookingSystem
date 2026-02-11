@@ -277,7 +277,7 @@ def update_schedule(
     conn.commit()
 
 
-def find_schedules(conn, origin_id, destination_id, travel_date):
+def find_schedules(conn, origin_id, destination_id, departure_date):
     cur = conn.cursor()
     cur.execute(
         """
@@ -288,7 +288,8 @@ def find_schedules(conn, origin_id, destination_id, travel_date):
             s.destination_station_id,
             s.departure_time,
             s.arrival_time,
-            s.travel_date,
+            s.departure_date,
+            s.arrival_date,
             s.fare,
             t.train_number,
             t.train_name
@@ -296,10 +297,10 @@ def find_schedules(conn, origin_id, destination_id, travel_date):
         JOIN trains t ON s.train_id = t.id
         WHERE s.origin_station_id = ?
           AND s.destination_station_id = ?
-          AND s.travel_date = ?
+          AND s.departure_date = ?
           AND t.status = 'active'
         """,
-        (origin_id, destination_id, travel_date),
+        (origin_id, destination_id, departure_date),
     )
     return cur.fetchall()
 
@@ -486,17 +487,25 @@ def create_booking(
 
 def get_bookings_by_user(conn, user_id):
     """
-    Return all bookings for a user with train, station & payment details.
-
-    - Includes pending bookings (no payment yet)
-    - Includes confirmed bookings with payment info
+    Return all bookings for a user with:
+    - user details
+    - train details
+    - station details
+    - schedule details (single matched row)
+    - payment details
     """
+
     cur = conn.cursor()
+
     cur.execute(
         """
         SELECT
             b.id,
             b.booking_code,
+
+            u.username,
+            u.full_name,
+
             b.travel_date,
             b.fare,
             b.status AS booking_status,
@@ -508,22 +517,76 @@ def get_bookings_by_user(conn, user_id):
             so.name AS origin_station,
             sd.name AS destination_station,
 
+            -- Fetch ONE matching schedule row safely
+            (
+                SELECT s.departure_time
+                FROM schedules s
+                WHERE s.train_id = b.train_id
+                  AND s.origin_station_id = b.origin_station_id
+                  AND s.destination_station_id = b.destination_station_id
+                  AND s.departure_date = b.travel_date
+                LIMIT 1
+            ) AS departure_time,
+
+            (
+                SELECT s.arrival_time
+                FROM schedules s
+                WHERE s.train_id = b.train_id
+                  AND s.origin_station_id = b.origin_station_id
+                  AND s.destination_station_id = b.destination_station_id
+                  AND s.departure_date = b.travel_date
+                LIMIT 1
+            ) AS arrival_time,
+
+            (
+                SELECT s.departure_date
+                FROM schedules s
+                WHERE s.train_id = b.train_id
+                  AND s.origin_station_id = b.origin_station_id
+                  AND s.destination_station_id = b.destination_station_id
+                  AND s.departure_date = b.travel_date
+                LIMIT 1
+            ) AS departure_date,
+
+            (
+                SELECT s.arrival_date
+                FROM schedules s
+                WHERE s.train_id = b.train_id
+                  AND s.origin_station_id = b.origin_station_id
+                  AND s.destination_station_id = b.destination_station_id
+                  AND s.departure_date = b.travel_date
+                LIMIT 1
+            ) AS arrival_date,
+
             p.amount AS payment_amount,
             p.method AS payment_method,
             p.status AS payment_status,
             p.transaction_id
 
         FROM bookings b
-        JOIN trains t ON b.train_id = t.id
-        JOIN stations so ON b.origin_station_id = so.id
-        JOIN stations sd ON b.destination_station_id = sd.id
-        LEFT JOIN payments p ON p.booking_id = b.id
+
+        JOIN users u
+            ON b.user_id = u.id
+
+        JOIN trains t
+            ON b.train_id = t.id
+
+        JOIN stations so
+            ON b.origin_station_id = so.id
+
+        JOIN stations sd
+            ON b.destination_station_id = sd.id
+
+        LEFT JOIN payments p
+            ON p.booking_id = b.id
 
         WHERE b.user_id = ?
+
         ORDER BY b.created_at DESC
         """,
         (user_id,),
     )
+
     return cur.fetchall()
 
 

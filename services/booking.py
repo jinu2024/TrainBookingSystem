@@ -45,15 +45,17 @@ def book_ticket(
     origin_station_id: int,
     destination_station_id: int,
     travel_date: str,
-    fare: float,
-    payment: dict,   # 👈 payment info comes in
+    fare: float,          
+    payment: dict,
 ) -> dict:
     """
     Create booking + payment atomically.
     """
+
     if not username:
         raise ValueError("Username is required")
 
+    # Validate date format
     try:
         datetime.strptime(travel_date, "%Y-%m-%d")
     except Exception:
@@ -62,33 +64,55 @@ def book_ticket(
     if origin_station_id == destination_station_id:
         raise ValueError("Origin and destination cannot be same")
 
+    if not payment or payment.get("status") != "success":
+        raise ValueError("Payment not successful")
+
     conn = connection.get_connection()
+
     try:
-        # User
+        # -------------------------
+        # USER VALIDATION
+        # -------------------------
         user = queries.get_user_by_username(conn, username)
         if not user:
             raise ValueError("User not found")
-        if user["role"] != "customer":
-            raise ValueError("Only customers can book")
 
-        # Train
-        trains = queries.get_all_trains(conn)
-        train = next(
-            (t for t in trains if t["id"] == train_id and t["status"] == "active"),
-            None,
-        )
-        if not train:
+        if user["role"] != "customer":
+            raise ValueError("Only customers can book tickets")
+
+        # -------------------------
+        # TRAIN VALIDATION
+        # -------------------------
+        train = queries.get_train_by_id(conn, train_id)
+        if not train or train["status"] != "active":
             raise ValueError("Train not found or inactive")
 
-        # Schedule
+        # -------------------------
+        # SCHEDULE VALIDATION
+        # -------------------------
         schedules = queries.find_schedules(
-            conn, origin_station_id, destination_station_id, travel_date
+            conn,
+            origin_station_id,
+            destination_station_id,
+            travel_date,
         )
-        if not any(s["train_id"] == train_id for s in schedules):
-            raise ValueError("No valid schedule found")
 
-        # Booking
+        schedule = next(
+            (s for s in schedules if s["train_id"] == train_id),
+            None,
+        )
+
+        if not schedule:
+            raise ValueError("No valid schedule found for selected train")
+
+        # ✅ REAL fare from DB
+        actual_fare = schedule["fare"]
+
+        # -------------------------
+        # CREATE BOOKING
+        # -------------------------
         booking_code = _generate_booking_code()
+
         booking_id = queries.create_booking(
             conn,
             booking_code,
@@ -97,16 +121,18 @@ def book_ticket(
             origin_station_id,
             destination_station_id,
             travel_date,
-            fare,
+            actual_fare,      
         )
 
-        # ✅ Payment (SAME CONNECTION)
+        # -------------------------
+        # CREATE PAYMENT
+        # -------------------------
         queries.create_payment(
             conn,
             booking_id=booking_id,
             amount=payment["amount"],
             method=payment["method"],
-            status=payment["status"],          # success
+            status=payment["status"],
             transaction_id=payment["transaction_id"],
         )
 
@@ -115,8 +141,11 @@ def book_ticket(
             "booking_code": booking_code,
             "train_number": train["train_number"],
             "train_name": train["train_name"],
-            "travel_date": travel_date,
-            "fare": fare,
+            "departure_time": schedule["departure_time"],
+            "arrival_time": schedule["arrival_time"],
+            "departure_date": schedule["departure_date"],
+            "arrival_date": schedule["arrival_date"],
+            "fare": actual_fare,
             "status": "confirmed",
         }
 
@@ -166,6 +195,89 @@ def cancel_booking_by_code(booking_code: str) -> None:
 
         # 2. Refund payment
         queries.refund_payment_by_booking_id(conn, booking_id)
+
+    finally:
+        connection.close_connection(conn)
+
+
+from datetime import datetime, timedelta
+
+
+def cancel_booking_by_code(booking_code: str) -> dict:
+    """
+    Cancel a booking and apply smart refund logic.
+    """
+
+    if not booking_code:
+        raise ValueError("Booking code is required")
+
+    conn = connection.get_connection()
+
+    try:
+        booking = queries.get_booking_by_code(conn, booking_code)
+        if not booking:
+            raise ValueError("Booking not found")
+
+        if booking["status"] == "cancelled":
+            raise ValueError("Booking is already cancelled")
+
+        booking_id = booking["id"]
+
+        # ---------------------------------------
+        # Get full booking details with schedule
+        # ---------------------------------------
+        full_booking = queries.get_bookings_by_user(conn, booking["user_id"])
+
+        booking_row = next(
+            (b for b in full_booking if b["booking_code"] == booking_code),
+            None,
+        )
+
+        if not booking_row:
+            raise ValueError("Schedule details not found")
+
+        # ---------------------------------------
+        # Calculate departure datetime
+        # ---------------------------------------
+        departure_str = (
+            f"{booking_row['departure_date']} "
+            f"{booking_row['departure_time']}"
+        )
+
+        departure_dt = datetime.strptime(
+            departure_str,
+            "%Y-%m-%d %H:%M",
+        )
+
+        now = datetime.now()
+
+        time_diff = departure_dt - now
+        hours_remaining = time_diff.total_seconds() / 3600
+
+        original_amount = booking_row["fare"]
+
+        # ---------------------------------------
+        # Refund Logic
+        # ---------------------------------------
+        if hours_remaining >= 6:
+            refund_amount = original_amount
+            deduction = 0
+        else:
+            deduction = round(original_amount * 0.10, 2)
+            refund_amount = round(original_amount - deduction, 2)
+
+        # ---------------------------------------
+        # Update booking + payment
+        # ---------------------------------------
+        queries.cancel_booking(conn, booking_code)
+        queries.refund_payment_by_booking_id(conn, booking_id)
+
+        return {
+            "original_amount": original_amount,
+            "refund_amount": refund_amount,
+            "deduction": deduction,
+            "hours_remaining": round(hours_remaining, 2),
+        }
 
     finally:
         connection.close_connection(conn)

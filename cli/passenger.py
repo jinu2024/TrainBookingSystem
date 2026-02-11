@@ -138,7 +138,7 @@ def passenger_dashboard(username: str, session_token: str | None = None) -> None
                 "Book Tickets",
                 "View Booking History",
                 "Edit Profile",
-                "Manage passenger master list",
+                "Download Ticket (PDF)",
                 "Help",
                 "Close CLI",
                 "Logout",
@@ -157,30 +157,14 @@ def passenger_dashboard(username: str, session_token: str | None = None) -> None
             profile_dashboard(username)
             continue
 
-        if choice == "Manage passenger master list":
-            # find user id from username
+        if choice == "Download Ticket (PDF)":
             try:
-                conn = None
-                # we need to locate the user record to get id
-                # reuse queries via connection module
-                from database import connection, queries
-
-                conn = connection.get_connection()
-                user = queries.get_user_by_username(conn, username)
-                if not user:
-                    messages.show_error("User not found")
-                else:
-                    # open passenger manager
-                    manage_passengers(user["id"])
+                download_ticket_dashboard(username)
             except Exception as exc:
-                messages.show_error(f"Failed to manage passengers: {exc}")
-            finally:
-                try:
-                    if conn:
-                        connection.close_connection(conn)
-                except Exception:
-                    pass
+                messages.show_error(f"Failed to download ticket: {exc}")
             continue
+
+
         if choice == "Logout":
             # invalidate session if present
             if session_token:
@@ -324,16 +308,13 @@ def book_tickets_dashboard(username: str) -> None:
         from database import connection, queries
         from services.booking import book_ticket
         from services.payments import process_payment
-        from utils.payment_validators import (
-            is_valid_card_number,
-            is_valid_cvv,
-            is_valid_expiry,
-            is_valid_otp,
-        )
+        from utils.validators import is_valid_schedule_date
 
         conn = connection.get_connection()
 
-        # Stations
+        # -----------------------------
+        # SELECT ORIGIN & DESTINATION
+        # -----------------------------
         stations = queries.get_all_stations(conn)
         if not stations:
             messages.show_error("No stations available")
@@ -341,60 +322,131 @@ def book_tickets_dashboard(username: str) -> None:
 
         station_choices = [f"{s['id']} - {s['name']} ({s['city']})" for s in stations]
 
-        origin = questionary.select("Select origin:", choices=station_choices).ask()
-        destination = questionary.select(
-            "Select destination:", choices=station_choices
-        ).ask()
-        if not origin or not destination:
+        origin = questionary.select("Select origin station:", choices=station_choices).ask()
+        if not origin:
+            return
+
+        destination = questionary.select("Select destination station:", choices=station_choices).ask()
+        if not destination:
             return
 
         origin_id = int(origin.split(" - ")[0])
         destination_id = int(destination.split(" - ")[0])
 
-        travel_date = questionary.text("Travel date (YYYY-MM-DD):").ask()
-
-        schedules = queries.find_schedules(conn, origin_id, destination_id, travel_date)
-        if not schedules:
-            messages.show_info("No trains available.")
+        if origin_id == destination_id:
+            messages.show_error("Origin and destination cannot be same")
             return
 
-        train_choices = {
-            f"{s['train_number']} ({s['train_name']}) | "
-            f"{s['departure_time']} → {s['arrival_time']} | Fare ₹{s['fare']}": s
-            for s in schedules
-        }
+        # -----------------------------
+        # VALIDATED DEPARTURE DATE
+        # -----------------------------
+        while True:
+            travel_date = questionary.text("Departure date (YYYY-MM-DD):").ask()
+            if not travel_date:
+                return
+
+            if not is_valid_schedule_date(travel_date):
+                messages.show_error("Invalid date. Must not be past and within 1 year.")
+                continue
+            break
+
+        # -----------------------------
+        # FIND MATCHING SCHEDULES
+        # -----------------------------
+        schedules = queries.find_schedules(conn, origin_id, destination_id, travel_date)
+
+        if not schedules:
+            messages.show_info("No trains available for this route and date.")
+            return
+
+        train_choices = {}
+        for s in schedules:
+            label = (
+                f"{s['train_number']} ({s['train_name']}) | "
+                f"{s['departure_date']} {s['departure_time']} → "
+                f"{s['arrival_date']} {s['arrival_time']} | "
+                f"Fare ₹{s['fare']}"
+            )
+            train_choices[label] = s
 
         selected_label = questionary.select(
             "Select train:", choices=list(train_choices.keys())
         ).ask()
+
         if not selected_label:
             return
 
         selected_schedule = train_choices[selected_label]
+
         train_id = selected_schedule["train_id"]
         fare = selected_schedule["fare"]
+
+        # -----------------------------
+        # CONFIRM JOURNEY DETAILS
+        # -----------------------------
+        console.print(
+            Panel(
+                f"""
+Train        : {selected_schedule['train_number']} - {selected_schedule['train_name']}
+Route        : {origin.split('-')[1].strip()} → {destination.split('-')[1].strip()}
+Departure    : {selected_schedule['departure_date']} {selected_schedule['departure_time']}
+Arrival      : {selected_schedule['arrival_date']} {selected_schedule['arrival_time']}
+Fare         : ₹{fare}
+                """,
+                title="Confirm Journey",
+                style="cyan",
+            )
+        )
 
         if not questionary.confirm("Proceed to payment?").ask():
             return
 
-        # Card validation
-        if not is_valid_card_number(questionary.text("Card Number:").ask()):
-            messages.show_error("Invalid card number")
-            return
-        if not is_valid_expiry(questionary.text("Expiry (MM/YY):").ask()):
-            messages.show_error("Invalid expiry")
-            return
-        if not is_valid_cvv(questionary.password("CVV:").ask()):
-            messages.show_error("Invalid CVV")
-            return
-        if not is_valid_otp(questionary.text("Enter OTP:").ask()):
-            messages.show_error("Invalid OTP")
-            return
+        # ====================================================
+        # 💳 DUMMY PAYMENT VALIDATION SECTION (NEW)
+        # ====================================================
 
-        # Payment
+        DUMMY_CARD = "1111222233334444"
+        DUMMY_EXPIRY = "12/30"
+        DUMMY_CVV = "123"
+        DUMMY_OTP = "0000"
+
+        console.print(
+            Panel(
+                """
+[bold yellow]Demo Card Details:[/bold yellow]
+
+Card Number : 1111222233334444
+Expiry      : 12/30
+CVV         : 123
+OTP         : 0000
+                """,
+                style="yellow",
+            )
+        )
+
+        while True:
+
+            card = questionary.text("Card Number:").ask()
+            expiry = questionary.text("Expiry (MM/YY):").ask()
+            cvv = questionary.password("CVV:").ask()
+            otp = questionary.text("Enter OTP:").ask()
+
+            if (
+                card == DUMMY_CARD
+                and expiry == DUMMY_EXPIRY
+                and cvv == DUMMY_CVV
+                and otp == DUMMY_OTP
+            ):
+                messages.show_success("Payment validated successfully.")
+                break
+            else:
+                messages.show_error("Invalid card details. Try again.")
+
+        # -----------------------------
+        # PROCESS PAYMENT
+        # -----------------------------
         payment = process_payment(amount=fare, method="card")
 
-        # Booking + payment (service handles DB)
         booking = book_ticket(
             username=username,
             train_id=train_id,
@@ -408,11 +460,12 @@ def book_tickets_dashboard(username: str) -> None:
         console.print(
             Panel(
                 f"""
-✅ Payment Successful & Ticket Confirmed!
+✅ Booking Confirmed!
 
 Booking Code : {booking['booking_code']}
 Train        : {booking['train_number']} - {booking['train_name']}
-Date         : {booking['travel_date']}
+Departure    : {selected_schedule['departure_date']} {selected_schedule['departure_time']}
+Arrival      : {selected_schedule['arrival_date']} {selected_schedule['arrival_time']}
 Amount Paid  : ₹{fare}
 
 🎟️ Have a safe journey!
@@ -431,12 +484,435 @@ Amount Paid  : ₹{fare}
             pass
 
 
+def profile_dashboard(username: str) -> None:
+    console = Console()
+    console.print(Panel(f"Profile — {username}", style="bold magenta"))
+
+    try:
+        from database import connection, queries
+        from utils.validators import (
+            is_valid_email,
+            is_valid_mobile_number,
+            is_valid_aadhaar,
+        )
+
+        conn = connection.get_connection()
+        user = queries.get_user_by_username(conn, username)
+
+        if not user:
+            messages.show_error("User not found.")
+            return
+
+        user = dict(user)
+
+        while True:
+            choice = questionary.select(
+                "Profile Options:",
+                choices=[
+                    "View Profile",
+                    "Edit Email",
+                    "Edit Mobile",
+                    "Edit Address",
+                    "Edit Aadhaar",
+                    "Back",
+                ],
+            ).ask()
+
+            if choice == "Back":
+                return
+
+            # --------------------------------------------------
+            # VIEW PROFILE
+            # --------------------------------------------------
+            if choice == "View Profile":
+                console.print(
+                    Panel(
+                        f"""
+Username     : {user['username']}
+Full Name    : {user.get('full_name', 'N/A')}
+Email        : {user.get('email', 'N/A')}
+Mobile       : {user.get('mobile', 'N/A')}
+DOB          : {user.get('dob', 'N/A')}
+Gender       : {user.get('gender', 'N/A')}
+Nationality  : {user.get('nationality', 'N/A')}
+Address      : {user.get('address', 'N/A')}
+Aadhaar      : {user.get('aadhaar', 'N/A')}
+                        """,
+                        style="cyan",
+                    )
+                )
+
+            # --------------------------------------------------
+            # EDIT EMAIL
+            # --------------------------------------------------
+            elif choice == "Edit Email":
+
+                new_email = questionary.text("Enter new email:").ask()
+                confirm_email = questionary.text("Re-enter new email:").ask()
+
+                if new_email != confirm_email:
+                    messages.show_error("Emails do not match.")
+                    continue
+
+                if not is_valid_email(new_email):
+                    messages.show_error("Invalid email format.")
+                    continue
+
+                existing = queries.get_user_by_email(conn, new_email)
+                if existing and existing["username"] != username:
+                    messages.show_error("Email already registered.")
+                    continue
+
+                cur = conn.cursor()
+                cur.execute(
+                    "UPDATE users SET email = ? WHERE username = ?",
+                    (new_email.strip(), username),
+                )
+                conn.commit()
+
+                messages.show_success("Email updated successfully.")
+                user = dict(queries.get_user_by_username(conn, username))
+
+            # --------------------------------------------------
+            # EDIT MOBILE
+            # --------------------------------------------------
+            elif choice == "Edit Mobile":
+
+                new_mobile = questionary.text("Enter new mobile number:").ask()
+                confirm_mobile = questionary.text("Re-enter new mobile number:").ask()
+
+                if new_mobile != confirm_mobile:
+                    messages.show_error("Mobile numbers do not match.")
+                    continue
+
+                if not is_valid_mobile_number(new_mobile):
+                    messages.show_error(
+                        "Mobile must be 10 digits starting with 6,7,8,9."
+                    )
+                    continue
+
+                existing = queries.get_user_by_mobile(conn, new_mobile)
+                if existing and existing["username"] != username:
+                    messages.show_error("Mobile already registered.")
+                    continue
+
+                cur = conn.cursor()
+                cur.execute(
+                    "UPDATE users SET mobile = ? WHERE username = ?",
+                    (new_mobile.strip(), username),
+                )
+                conn.commit()
+
+                messages.show_success("Mobile updated successfully.")
+                user = dict(queries.get_user_by_username(conn, username))
+
+            # --------------------------------------------------
+            # EDIT ADDRESS
+            # --------------------------------------------------
+            elif choice == "Edit Address":
+
+                new_address = questionary.text("Enter new address:").ask()
+                confirm_address = questionary.text("Re-enter new address:").ask()
+
+                if new_address != confirm_address:
+                    messages.show_error("Addresses do not match.")
+                    continue
+
+                if not new_address or len(new_address.strip()) < 5:
+                    messages.show_error("Address must be at least 5 characters.")
+                    continue
+
+                cur = conn.cursor()
+                cur.execute(
+                    "UPDATE users SET address = ? WHERE username = ?",
+                    (new_address.strip(), username),
+                )
+                conn.commit()
+
+                messages.show_success("Address updated successfully.")
+                user = dict(queries.get_user_by_username(conn, username))
+
+            # --------------------------------------------------
+            # EDIT AADHAAR
+            # --------------------------------------------------
+            elif choice == "Edit Aadhaar":
+
+                new_aadhaar = questionary.text("Enter new Aadhaar number:").ask()
+                confirm_aadhaar = questionary.text("Re-enter new Aadhaar number:").ask()
+
+                if new_aadhaar != confirm_aadhaar:
+                    messages.show_error("Aadhaar numbers do not match.")
+                    continue
+
+                if not is_valid_aadhaar(new_aadhaar):
+                    messages.show_error("Aadhaar must be exactly 12 digits.")
+                    continue
+
+                # Duplicate check
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT * FROM users WHERE aadhaar = ?",
+                    (new_aadhaar,),
+                )
+                existing = cur.fetchone()
+
+                if existing and existing["username"] != username:
+                    messages.show_error("Aadhaar already registered.")
+                    continue
+
+                cur.execute(
+                    "UPDATE users SET aadhaar = ? WHERE username = ?",
+                    (new_aadhaar.strip(), username),
+                )
+                conn.commit()
+
+                messages.show_success("Aadhaar updated successfully.")
+                user = dict(queries.get_user_by_username(conn, username))
+
+    except Exception as e:
+        messages.show_error(str(e))
+
+    finally:
+        try:
+            connection.close_connection(conn)
+        except Exception:
+            pass
+
+
+def profile_dashboard(username: str) -> None:
+    console = Console()
+    console.print(Panel(f"Profile — {username}", style="bold magenta"))
+
+    try:
+        from database import connection, queries
+        from utils.validators import (
+            is_valid_email,
+            is_valid_mobile_number,
+            is_valid_aadhaar,
+        )
+
+        conn = connection.get_connection()
+        user_row = queries.get_user_by_username(conn, username)
+
+        if not user_row:
+            messages.show_error("User not found.")
+            return
+
+        user = dict(user_row)  # ✅ Convert sqlite row → dict
+
+        while True:
+
+            choice = questionary.select(
+                "Profile Options:",
+                choices=[
+                    "View Profile",
+                    "Edit Email",
+                    "Edit Mobile",
+                    "Edit Address",
+                    "Edit Aadhaar",
+                    "Back",
+                ],
+            ).ask()
+
+            if choice == "Back":
+                break
+
+            # --------------------------------------------------
+            # VIEW PROFILE
+            # --------------------------------------------------
+            if choice == "View Profile":
+                console.print(
+                    Panel(
+                        f"""
+Username     : {user.get('username')}
+Full Name    : {user.get('full_name') or 'N/A'}
+Email        : {user.get('email') or 'N/A'}
+Mobile       : {user.get('mobile') or 'N/A'}
+DOB          : {user.get('dob') or 'N/A'}
+Gender       : {user.get('gender') or 'N/A'}
+Nationality  : {user.get('nationality') or 'N/A'}
+Address      : {user.get('address') or 'N/A'}
+Aadhaar      : {user.get('aadhaar') or 'N/A'}
+                        """,
+                        style="cyan",
+                    )
+                )
+
+            # --------------------------------------------------
+            # EDIT EMAIL
+            # --------------------------------------------------
+            elif choice == "Edit Email":
+
+                new_email = questionary.text("Enter new email:").ask()
+                confirm_email = questionary.text("Re-enter new email:").ask()
+
+                if new_email != confirm_email:
+                    messages.show_error("Emails do not match.")
+                    continue
+
+                if not is_valid_email(new_email):
+                    messages.show_error("Invalid email format.")
+                    continue
+
+                existing = queries.get_user_by_email(conn, new_email)
+                if existing and dict(existing)["username"] != username:
+                    messages.show_error("Email already registered.")
+                    continue
+
+                conn.execute(
+                    "UPDATE users SET email = ? WHERE username = ?",
+                    (new_email.strip(), username),
+                )
+                conn.commit()
+
+                messages.show_success("Email updated successfully.")
+                user = dict(queries.get_user_by_username(conn, username))
+
+            # --------------------------------------------------
+            # EDIT MOBILE
+            # --------------------------------------------------
+            elif choice == "Edit Mobile":
+
+                new_mobile = questionary.text("Enter new mobile number:").ask()
+                confirm_mobile = questionary.text("Re-enter new mobile number:").ask()
+
+                if new_mobile != confirm_mobile:
+                    messages.show_error("Mobile numbers do not match.")
+                    continue
+
+                if not is_valid_mobile_number(new_mobile):
+                    messages.show_error(
+                        "Mobile must be 10 digits starting with 6,7,8,9."
+                    )
+                    continue
+
+                existing = queries.get_user_by_mobile(conn, new_mobile)
+                if existing and dict(existing)["username"] != username:
+                    messages.show_error("Mobile already registered.")
+                    continue
+
+                conn.execute(
+                    "UPDATE users SET mobile = ? WHERE username = ?",
+                    (new_mobile.strip(), username),
+                )
+                conn.commit()
+
+                messages.show_success("Mobile updated successfully.")
+                user = dict(queries.get_user_by_username(conn, username))
+
+            # --------------------------------------------------
+            # EDIT ADDRESS
+            # --------------------------------------------------
+            elif choice == "Edit Address":
+
+                new_address = questionary.text("Enter new address:").ask()
+                confirm_address = questionary.text("Re-enter new address:").ask()
+
+                if new_address != confirm_address:
+                    messages.show_error("Addresses do not match.")
+                    continue
+
+                if not new_address or len(new_address.strip()) < 5:
+                    messages.show_error("Address must be at least 5 characters.")
+                    continue
+
+                conn.execute(
+                    "UPDATE users SET address = ? WHERE username = ?",
+                    (new_address.strip(), username),
+                )
+                conn.commit()
+
+                messages.show_success("Address updated successfully.")
+                user = dict(queries.get_user_by_username(conn, username))
+
+            # --------------------------------------------------
+            # EDIT AADHAAR
+            # --------------------------------------------------
+            elif choice == "Edit Aadhaar":
+
+                new_aadhaar = questionary.text("Enter new Aadhaar number:").ask()
+                confirm_aadhaar = questionary.text("Re-enter new Aadhaar number:").ask()
+
+                if new_aadhaar != confirm_aadhaar:
+                    messages.show_error("Aadhaar numbers do not match.")
+                    continue
+
+                if not is_valid_aadhaar(new_aadhaar):
+                    messages.show_error("Aadhaar must be exactly 12 digits.")
+                    continue
+
+                existing = conn.execute(
+                    "SELECT * FROM users WHERE aadhaar = ?",
+                    (new_aadhaar,),
+                ).fetchone()
+
+                if existing and dict(existing)["username"] != username:
+                    messages.show_error("Aadhaar already registered.")
+                    continue
+
+                conn.execute(
+                    "UPDATE users SET aadhaar = ? WHERE username = ?",
+                    (new_aadhaar.strip(), username),
+                )
+                conn.commit()
+
+                messages.show_success("Aadhaar updated successfully.")
+                user = dict(queries.get_user_by_username(conn, username))
+
+    except Exception as e:
+        messages.show_error(str(e))
+
+    finally:
+        try:
+            connection.close_connection(conn)
+        except Exception:
+            pass
+
+
+def help_dashboard(username: str) -> None:
+    console = Console()
+    console.print(Panel("Passenger Help Center", style="bold yellow"))
+
+    help_text = """
+        📌 BOOKING TICKETS
+        - Select origin and destination stations.
+        - Choose valid departure date.
+        - Complete payment using card details.
+
+        📌 CANCELLATION POLICY
+        - Cancel ≥ 6 hours before departure → Full refund.
+        - Cancel < 6 hours before departure → 10% deduction.
+        - Cancellation after departure is not recommended.
+
+        📌 DOWNLOAD TICKET
+        - Only confirmed bookings can be downloaded.
+        - Ticket is saved in the 'tickets' folder.
+        - Ticket opens automatically after generation.
+
+        📌 PROFILE MANAGEMENT
+        - You can update email, mobile, and address.
+        - Ensure correct information for ticket accuracy.
+
+        📌 SUPPORT
+        For assistance, contact:
+        support_champion@trainbookingsystem.com
+
+        Thank you for using Train Booking System!
+            """
+
+    console.print(Panel(help_text, style="yellow"))
+
+
 def booking_history_dashboard(username: str) -> None:
     console = Console()
     console.print(Panel(f"Booking History — {username}", style="bold magenta"))
 
     try:
         bookings = booking.get_booking_history(username)
+
+        if not bookings:
+            messages.show_info("No bookings found.")
+            return
 
         table = Table(show_header=True, header_style="bold cyan")
         table.add_column("Booking Code")
@@ -447,22 +923,31 @@ def booking_history_dashboard(username: str) -> None:
         table.add_column("Booking Status")
         table.add_column("Payment Status")
         table.add_column("Txn ID")
+        table.add_column("Action")
+
+        cancellable_bookings = {}
 
         for b in bookings:
-            # Booking status
+
             booking_status = (
                 "[green]CONFIRMED[/green]"
                 if b["booking_status"] == "confirmed"
                 else "[red]CANCELLED[/red]"
             )
 
-            # Payment status (CORRECT LOGIC)
             if b["payment_status"] == "success":
                 payment_status = "[green]SUCCESS[/green]"
             elif b["payment_status"] == "refunded":
                 payment_status = "[yellow]REFUNDED[/yellow]"
             else:
                 payment_status = "-"
+
+            # Action column
+            if b["booking_status"] == "confirmed":
+                action = "[red]Delete[/red]"
+                cancellable_bookings[b["booking_code"]] = b
+            else:
+                action = "-"
 
             table.add_row(
                 b["booking_code"],
@@ -473,24 +958,166 @@ def booking_history_dashboard(username: str) -> None:
                 booking_status,
                 payment_status,
                 b["transaction_id"] or "-",
+                action,
             )
 
         console.print(table)
 
+        # ---------------------------------
+        # Cancel Flow
+        # ---------------------------------
+        if cancellable_bookings:
+
+            selected = questionary.select(
+                "Select booking to delete (or Back):",
+                choices=list(cancellable_bookings.keys()) + ["Back"],
+            ).ask()
+
+            if not selected or selected == "Back":
+                return
+
+            if questionary.confirm(
+                f"Are you sure you want to delete booking {selected}?"
+            ).ask():
+
+                from services.booking import cancel_booking_by_code
+
+                result = cancel_booking_by_code(selected)
+
+                console.print(
+                    Panel(
+                        f"""
+                            [bold green]Booking Cancelled Successfully[/bold green]
+
+                            Original Fare : ₹{result['original_amount']}
+                            Refund Amount : ₹{result['refund_amount']}
+                            Deduction     : ₹{result['deduction']}
+
+                            Hours before departure: {result['hours_remaining']} hrs
+                        """,
+                        style="green",
+                    )
+                )
+
     except ValueError as e:
         messages.show_warning(str(e))
 
+    except Exception as e:
+        messages.show_error(str(e))
 
-def profile_dashboard(username: str) -> None:
+
+def download_ticket_dashboard(username: str) -> None:
     console = Console()
-    console.print(Panel(f"Profile — {username}", style="bold magenta"))
-    messages.show_info("Profile editing not implemented yet.")
+    console.print(Panel(f"Download Ticket — {username}", style="bold green"))
 
+    try:
+        from services.booking import get_booking_history
+        from services.ticket_pdf import generate_ticket_pdf
+        import os
+        import platform
+        import subprocess
 
-def help_dashboard(username: str) -> None:
-    console = Console()
-    console.print(Panel("Passenger Help", style="bold yellow"))
-    messages.show_info("Help is not available yet.")
+        # -------------------------------------
+        # Fetch booking history
+        # -------------------------------------
+        bookings = get_booking_history(username)
+
+        if not bookings:
+            messages.show_info("No bookings available.")
+            return
+
+        # Only confirmed bookings allowed
+        confirmed_bookings = [
+            b for b in bookings if b["booking_status"] == "confirmed"
+        ]
+
+        if not confirmed_bookings:
+            messages.show_info("No confirmed bookings available for download.")
+            return
+
+        # -------------------------------------
+        # Build selection list
+        # -------------------------------------
+        booking_choices = {
+            f"{b['booking_code']} | "
+            f"{b['train_number']} {b['train_name']} | "
+            f"{b['origin_station']} → {b['destination_station']} | "
+            f"{b['travel_date']}": b
+            for b in confirmed_bookings
+        }
+
+        selected_label = questionary.select(
+            "Select booking to download ticket:",
+            choices=list(booking_choices.keys()) + ["Back"],
+        ).ask()
+
+        if not selected_label or selected_label == "Back":
+            return
+
+        # Convert sqlite3.Row → dict
+        selected_booking = dict(booking_choices[selected_label])
+
+        # -------------------------------------
+        # Create tickets directory
+        # -------------------------------------
+        tickets_dir = "tickets"
+        os.makedirs(tickets_dir, exist_ok=True)
+
+        file_name = f"ticket_{selected_booking['booking_code']}.pdf"
+        file_path = os.path.join(tickets_dir, file_name)
+
+        # -------------------------------------
+        # Generate PDF
+        # -------------------------------------
+        generate_ticket_pdf(selected_booking, file_path)
+
+        # -------------------------------------
+        # Auto-open PDF
+        # -------------------------------------
+        try:
+            system_name = platform.system()
+
+            if system_name == "Windows":
+                os.startfile(file_path)
+
+            elif system_name == "Darwin":  # macOS
+                subprocess.call(["open", file_path])
+
+            elif system_name == "Linux":
+                subprocess.call(["xdg-open", file_path])
+
+            console.print(
+                Panel(
+                    f"""
+[bold green]Ticket Generated Successfully![/bold green]
+
+File Name : {file_name}
+Saved In  : {tickets_dir}/
+
+Opening ticket automatically...
+                    """,
+                    style="green",
+                )
+            )
+
+        except Exception:
+            console.print(
+                Panel(
+                    f"""
+[bold yellow]Ticket Generated Successfully![/bold yellow]
+
+File Name : {file_name}
+Saved In  : {tickets_dir}/
+
+Could not auto-open the file.
+Please open it manually from the tickets folder.
+                    """,
+                    style="yellow",
+                )
+            )
+
+    except Exception as e:
+        messages.show_error(str(e))
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ dependencies = [
     "pysqlite3>=0.6.0",
     "pytest>=9.0.2",
     "questionary>=2.1.1",
+    "reportlab>=4.4.9",
     "rich>=14.3.2",
 ]
 

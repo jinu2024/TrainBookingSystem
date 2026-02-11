@@ -298,7 +298,6 @@ def find_schedules(conn, origin_id, destination_id, departure_date):
         WHERE s.origin_station_id = ?
           AND s.destination_station_id = ?
           AND s.departure_date = ?
-          AND t.status = 'active'
         """,
         (origin_id, destination_id, departure_date),
     )

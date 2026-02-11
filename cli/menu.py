@@ -13,6 +13,8 @@ from services import user as user_service
 from database import connection, queries
 from datetime import datetime, timezone
 
+from utils.__helper import ask_required
+
 console = Console()
 
 
@@ -53,7 +55,8 @@ def main_menu() -> None:
         elif choice == "Sign in":
             try:
                 # single sign-in page for both admin and passenger
-                identifier = questionary.text("Username or Email:").ask()
+                identifier = ask_required("Username or Email:")
+
                 password = questionary.password("Password:").ask()
                 user = user_service.authenticate_user(identifier, password)
                 role = user.get("role")

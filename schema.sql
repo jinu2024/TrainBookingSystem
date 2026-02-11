@@ -96,6 +96,13 @@ CREATE TABLE IF NOT EXISTS schedules (
     FOREIGN KEY (train_id) REFERENCES trains(id),
     FOREIGN KEY (origin_station_id) REFERENCES stations(id),
     FOREIGN KEY (destination_station_id) REFERENCES stations(id)
+    UNIQUE (
+        train_id,
+        origin_station_id,
+        destination_station_id,
+        departure_date,
+        departure_time
+    )
 );
 
 -- 🚄 Train 1 → Indore → Rewa → Bhopal → Delhi → Agra

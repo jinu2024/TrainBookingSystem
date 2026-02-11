@@ -62,24 +62,12 @@ def register_customer(
             if not email:
                 return
 
-            mobile = ask_with_validation(
-                "Mobile (optional):",
-                validator=is_valid_mobile_number,
-                error_msg="Mobile must be 10 digits starting with 6,7,8,9",
-            )
-            if mobile is None:
-                return
+            mobile = questionary.text("Mobile (optional):").ask()
 
-            aadhaar = ask_with_validation(
-                "Aadhaar (optional):",
-                validator=is_valid_aadhaar,
-                error_msg="Aadhaar must contain only digits and 12 digits long",
-            )
-            if aadhaar is None:
-                return
+            aadhaar = questionary.text("Aadhaar (optional):").ask()
 
-            nationality = ask_required("Nationality (optional):")
-            address = ask_required("Address (optional):")
+            nationality = questionary.text("Nationality (optional):").ask()
+            address = questionary.text("Address (optional):").ask()
 
             messages.show_info(
                 "Create a strong password mixed of special characters, numbers, upper and lower alphabets. 8-16 chars."

@@ -42,7 +42,7 @@ def main_menu() -> None:
     while True:
         choice = questionary.select(
             "Main Menu",
-            choices=["Sign up", "Sign in", "About", "Exit"],
+            choices=["Sign up", "Sign in", "Exit"],
         ).ask()
 
         if choice == "Sign up":
@@ -69,12 +69,6 @@ def main_menu() -> None:
                     )
             except Exception as exc:
                 messages.show_error(str(exc))
-        elif choice == "About":
-            # TODO: display contain of file MENU_ABOUT.md file in CLI UI
-
-            messages.show_info(
-                "TrainBookingSystem — CLI demo. See MENU_ABOUT.md for details."
-            )
         elif choice == "Exit":
             console.print("Goodbye.")
             sys.exit(0)

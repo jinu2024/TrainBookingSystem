@@ -303,21 +303,47 @@ def station_details_update() -> None:
 def train_journey_details_update() -> None:
     console.print("[cyan]Update Train Journey Details[/cyan]")
 
+    try:
+        from services import schedule as schedule_service
+        from services import train as train_service
+        from services import station as station_service
+    except Exception as e:
+        console.print(f"[bold red]Import error: {e}[/bold red]")
+        return
+
     rows = schedule_service.list_schedules()
 
     if not rows:
         console.print("[yellow]No train journeys available[/yellow]")
         return
 
+    # ================= LOAD TRAIN LOOKUP =================
+    trains = train_service.list_trains()
+    train_lookup = {t["id"]: f"{t['train_number']} - {t['train_name']}" for t in trains}
+
+    # ================= LOAD STATION LOOKUP =================
+    stations = station_service.list_stations()
+    station_lookup = {s["id"]: f"{s['code']} - {s['name']}" for s in stations}
+
     # ================= SELECT JOURNEY =================
     journey_map = {}
 
     for r in rows:
+        train_display = train_lookup.get(r["train_id"], str(r["train_id"]))
+        origin_display = station_lookup.get(
+            r["origin_station_id"], str(r["origin_station_id"])
+        )
+        dest_display = station_lookup.get(
+            r["destination_station_id"], str(r["destination_station_id"])
+        )
+
         display = (
-            f"{r['id']} | Train:{r['train_id']} | "
-            f"{r['origin_station_id']}->{r['destination_station_id']} | "
+            f"{r['id']} | "
+            f"{train_display} | "
+            f"{origin_display} → {dest_display} | "
             f"{r['departure_date']} {r['departure_time']}"
         )
+
         journey_map[display] = r
 
     choice = questionary.select(
@@ -347,14 +373,12 @@ def train_journey_details_update() -> None:
     console.print("\n[yellow]Press ENTER to keep existing value[/yellow]\n")
 
     # ================= STATIONS =================
-    stations = station_service.list_stations()
-
-    station_map = {f"{s['id']} - {s['code']} - {s['name']}": s["id"] for s in stations}
+    station_map = {f"{s['code']} - {s['name']}": s["id"] for s in stations}
 
     station_choices = list(station_map.keys())
 
     origin_choice = questionary.select(
-        f"Origin station [current: {origin_id}]",
+        f"Origin station [current: {station_lookup.get(origin_id)}]",
         choices=["<keep current>"] + station_choices,
     ).ask()
 
@@ -362,7 +386,7 @@ def train_journey_details_update() -> None:
         origin_id = station_map[origin_choice]
 
     dest_choice = questionary.select(
-        f"Destination station [current: {dest_id}]",
+        f"Destination station [current: {station_lookup.get(dest_id)}]",
         choices=["<keep current>"] + station_choices,
     ).ask()
 
@@ -439,6 +463,7 @@ def train_journey_details_update() -> None:
     except Exception as e:
         console.print(f"[bold red]Error updating journey: {e}[/bold red]")
 
+
 def delete_train_journey_by_admin() -> None:
     console.print("[cyan] Delete Train Journey[/cyan]")
 
@@ -459,17 +484,11 @@ def delete_train_journey_by_admin() -> None:
 
     # ================= LOAD TRAIN DATA =================
     trains = train_service.list_trains()
-    train_lookup = {
-        t["id"]: f"{t['train_number']} - {t['train_name']}"
-        for t in trains
-    }
+    train_lookup = {t["id"]: f"{t['train_number']} - {t['train_name']}" for t in trains}
 
     # ================= LOAD STATION DATA =================
     stations = station_service.list_stations()
-    station_lookup = {
-        s["id"]: f"{s['code']} - {s['name']}"
-        for s in stations
-    }
+    station_lookup = {s["id"]: f"{s['code']} - {s['name']}" for s in stations}
 
     schedule_map = {}
     choices = []

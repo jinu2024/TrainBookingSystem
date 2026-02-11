@@ -151,8 +151,17 @@ def update_schedule(
         if not train_row:
             raise ValueError("train_id does not exist")
 
-        status = train_row.get("status") if isinstance(train_row, dict) else None
-        print(f"Status: {status}")
+        # Handle both dict and tuple results
+        if isinstance(train_row, dict):
+            status = train_row.get("status", "active")
+        else:
+            # assuming tuple: (id, train_number, train_name, status)
+            status = train_row[3] if len(train_row) >= 4 else "active"
+
+        # Treat NULL as active
+        if not status:
+            status = "active"
+
         if status != "active":
             raise ValueError("train is not active")
 

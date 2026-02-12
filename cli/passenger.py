@@ -316,8 +316,6 @@ Fare         : ₹{fare}
         DUMMY_CARD = "1111222233334444"
         DUMMY_EXPIRY = "12/30"
         DUMMY_CVV = "123"
-        DUMMY_OTP = "0000"
-
         console.print(
             Panel(
                 """
@@ -326,7 +324,6 @@ Fare         : ₹{fare}
 Card Number : 1111222233334444
 Expiry      : 12/30
 CVV         : 123
-OTP         : 0000
                 """,
                 style="yellow",
             )
@@ -337,13 +334,11 @@ OTP         : 0000
             card = questionary.text("Card Number:").ask()
             expiry = questionary.text("Expiry (MM/YY):").ask()
             cvv = questionary.password("CVV:").ask()
-            otp = questionary.text("Enter OTP:").ask()
 
             if (
                 card == DUMMY_CARD
                 and expiry == DUMMY_EXPIRY
                 and cvv == DUMMY_CVV
-                and otp == DUMMY_OTP
             ):
                 messages.show_success("Payment validated successfully.")
                 break

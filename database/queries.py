@@ -207,37 +207,42 @@ def create_schedule(
     train_id,
     origin_station_id,
     destination_station_id,
+    departure_date,
+    arrival_date,
     departure_time,
     arrival_time,
-    travel_date,
     fare,
 ):
-    cur = conn.cursor()
-    cur.execute(
+    cursor = conn.cursor()
+
+    cursor.execute(
         """
         INSERT INTO schedules (
             train_id,
             origin_station_id,
             destination_station_id,
+            departure_date,
+            arrival_date,
             departure_time,
             arrival_time,
-            travel_date,
             fare
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             train_id,
             origin_station_id,
             destination_station_id,
+            departure_date,
+            arrival_date,
             departure_time,
             arrival_time,
-            travel_date,
             fare,
         ),
     )
+
     conn.commit()
-    return cur.lastrowid
+    return cursor.lastrowid
 
 
 def update_schedule(

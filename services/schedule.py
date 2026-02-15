@@ -1,97 +1,88 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime,timedelta
 
 from database import connection, queries
+from utils.validators import is_valid_schedule_date, is_valid_time
+
 
 
 def create_schedule(
     train_id: int,
     origin_station_id: int,
     destination_station_id: int,
-    travel_date: str,
+    departure_date: str,
+    arrival_date: str,
     departure_time: str,
     arrival_time: str,
     fare: float,
 ) -> int:
-    """Create a schedule entry after validating inputs.
 
-    travel_date: 'YYYY-MM-DD'
-    departure_time / arrival_time: 'HH:MM'
-
-    Returns the new schedule id.
-    Raises ValueError on validation errors.
-    """
-    # Date validation
-    try:
-        datetime.strptime(travel_date, "%Y-%m-%d").date()
-    except Exception:
-        raise ValueError("travel_date must be in YYYY-MM-DD format")
-
-    # Time validation
-    try:
-        datetime.strptime(departure_time, "%H:%M").time()
-        datetime.strptime(arrival_time, "%H:%M").time()
-    except Exception:
-        raise ValueError("departure_time and arrival_time must be in HH:MM format")
-
-    # Fare validation
-    if fare is None:
-        raise ValueError("fare is required")
-
+    # ================= FARE VALIDATION =================
     try:
         fare = float(fare)
-    except Exception:
-        raise ValueError("fare must be a number")
+    except:
+        raise ValueError("Fare must be a number")
 
-    if fare <= 0:
-        raise ValueError("fare must be greater than zero")
+    if fare < 50:
+        raise ValueError("Minimum fare must be ₹50")
 
-    # departure must be before arrival (same-day journeys enforced here)
-    if departure_time >= arrival_time:
-        raise ValueError("departure_time must be earlier than arrival_time")
+    if fare > 400000:
+        raise ValueError("Maximum fare cannot exceed ₹4,00,000")
 
+    # ================= DATETIME VALIDATION =================
+    dep_dt = datetime.strptime(
+        f"{departure_date} {departure_time}",
+        "%Y-%m-%d %H:%M",
+    )
+
+    arr_dt = datetime.strptime(
+        f"{arrival_date} {arrival_time}",
+        "%Y-%m-%d %H:%M",
+    )
+
+    if arr_dt <= dep_dt:
+        raise ValueError("Arrival must be after departure")
+
+    duration = arr_dt - dep_dt
+
+    if duration < timedelta(minutes=30):
+        raise ValueError("Minimum journey duration must be 30 minutes")
+
+    if duration > timedelta(days=31):
+        raise ValueError("Journey duration cannot exceed 1 month")
+
+    # ================= DATABASE VALIDATION =================
     conn = connection.get_connection()
-    try:
-        # validate train exists and is active
-        train_row = queries.get_train_by_id(conn, int(train_id))
-        if not train_row:
-            raise ValueError("train_id does not exist")
-        # train_row may be sqlite3.Row or tuple
-        try:
-            status = train_row["status"]
-        except Exception:
-            status = train_row[4] if len(train_row) > 4 else None
-        if status != "active":
-            raise ValueError("train is not active")
 
-        # validate stations exist
-        origin_row = queries.get_station_by_id(conn, int(origin_station_id))
-        if not origin_row:
+    try:
+        if not queries.get_train_by_id(conn, train_id):
+            raise ValueError("train_id does not exist")
+
+        if not queries.get_station_by_id(conn, origin_station_id):
             raise ValueError("origin station does not exist")
-        dest_row = queries.get_station_by_id(conn, int(destination_station_id))
-        if not dest_row:
+
+        if not queries.get_station_by_id(conn, destination_station_id):
             raise ValueError("destination station does not exist")
 
-        if int(origin_station_id) == int(destination_station_id):
+        if origin_station_id == destination_station_id:
             raise ValueError("origin and destination must be different")
 
         return queries.create_schedule(
             conn,
-            int(train_id),
-            int(origin_station_id),
-            int(destination_station_id),
+            train_id,
+            origin_station_id,
+            destination_station_id,
+            departure_date,
+            arrival_date,
             departure_time,
             arrival_time,
-            travel_date,
             fare,
         )
+
     finally:
         connection.close_connection(conn)
 
-
-from datetime import datetime
-from utils.validators import is_valid_schedule_date, is_valid_time
 
 
 def update_schedule(
@@ -108,11 +99,14 @@ def update_schedule(
     """
     Update an existing schedule after validating inputs.
 
-    Raises:
-        ValueError on validation errors
+    Business Rules:
+    - Fare must be between ₹50 and ₹4,00,000
+    - Minimum journey duration: 30 minutes
+    - Maximum journey duration: 1 month
+    - Arrival must be after departure
     """
 
-    # ================= BASIC VALIDATION =================
+    # ================= BASIC DATE VALIDATION =================
 
     if not is_valid_schedule_date(departure_date):
         raise ValueError("departure_date must be YYYY-MM-DD")
@@ -120,51 +114,77 @@ def update_schedule(
     if not is_valid_schedule_date(arrival_date):
         raise ValueError("arrival_date must be YYYY-MM-DD")
 
-    if not is_valid_time(departure_time) or not is_valid_time(arrival_time):
-        raise ValueError("Time must be HH:MM format")
+    if not is_valid_time(departure_time):
+        raise ValueError("departure_time must be HH:MM format")
+
+    if not is_valid_time(arrival_time):
+        raise ValueError("arrival_time must be HH:MM format")
+
+    # ================= FARE VALIDATION =================
 
     try:
         fare = float(fare)
-        if fare < 0:
-            raise ValueError
-    except:
-        raise ValueError("Fare must be positive number")
+    except Exception:
+        raise ValueError("Fare must be a number")
+
+    if fare < 50:
+        raise ValueError("Minimum fare must be ₹50")
+
+    if fare > 400000:
+        raise ValueError("Maximum fare cannot exceed ₹4,00,000")
 
     # ================= DATETIME LOGIC =================
 
-    dep_dt = datetime.strptime(f"{departure_date} {departure_time}", "%Y-%m-%d %H:%M")
+    dep_dt = datetime.strptime(
+        f"{departure_date} {departure_time}",
+        "%Y-%m-%d %H:%M"
+    )
 
-    arr_dt = datetime.strptime(f"{arrival_date} {arrival_time}", "%Y-%m-%d %H:%M")
+    arr_dt = datetime.strptime(
+        f"{arrival_date} {arrival_time}",
+        "%Y-%m-%d %H:%M"
+    )
 
     if arr_dt <= dep_dt:
         raise ValueError("Arrival must be after departure")
 
+    duration = arr_dt - dep_dt
+
+    if duration < timedelta(minutes=30):
+        raise ValueError("Minimum journey duration must be 30 minutes")
+
+    if duration > timedelta(days=31):
+        raise ValueError("Journey duration cannot exceed 1 month")
+
+    # ================= DATABASE VALIDATION =================
+
     conn = connection.get_connection()
 
     try:
-        # ================= EXISTENCE CHECKS =================
-
+        # Schedule existence
         if not queries.get_schedule_by_id(conn, int(schedule_id)):
             raise ValueError("schedule_id does not exist")
 
+        # Train validation
         train_row = queries.get_train_by_id(conn, int(train_id))
         if not train_row:
             raise ValueError("train_id does not exist")
 
-        # Handle both dict and tuple results
+        # Handle both dict and tuple row formats
         if isinstance(train_row, dict):
-            status = train_row.get("status", "active")
+            status = train_row.get("status")
         else:
             # assuming tuple: (id, train_number, train_name, status)
-            status = train_row[3] if len(train_row) >= 4 else "active"
+            status = train_row[3] if len(train_row) >= 4 else None
 
-        # Treat NULL as active
+        # Treat NULL as active (optional business rule)
         if not status:
             status = "active"
 
         if status != "active":
             raise ValueError("train is not active")
 
+        # Station validation
         if not queries.get_station_by_id(conn, int(origin_station_id)):
             raise ValueError("origin station does not exist")
 
@@ -174,7 +194,7 @@ def update_schedule(
         if int(origin_station_id) == int(destination_station_id):
             raise ValueError("origin and destination must be different")
 
-        # ================= UPDATE =================
+        # ================= UPDATE EXECUTION =================
 
         queries.update_schedule(
             conn,
@@ -186,12 +206,11 @@ def update_schedule(
             arrival_date,
             departure_time,
             arrival_time,
-            float(fare),
+            fare,
         )
 
     finally:
         connection.close_connection(conn)
-
 
 def list_schedules() -> list:
     """Return all schedules as a list of rows."""

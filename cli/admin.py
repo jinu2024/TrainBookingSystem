@@ -148,9 +148,7 @@ def admin_add_station() -> None:
 def admin_schedule_new_train_jouney() -> None:
     console.print("[cyan] Schedule New Train Journey[/cyan]")
 
-    from datetime import datetime
-    from services import station as station_service
-    from services import schedule as schedule_service
+    from datetime import datetime, timedelta
 
     rows = train_service.list_trains()
     if not rows:
@@ -163,7 +161,7 @@ def admin_schedule_new_train_jouney() -> None:
 
     train_choice = questionary.select("Select train:", choices=list(train_map)).ask()
     if not train_choice:
-        raise SystemExit
+        return
 
     train_id = train_map[train_choice]
 
@@ -174,74 +172,120 @@ def admin_schedule_new_train_jouney() -> None:
         "Origin station:", choices=list(station_map)
     ).ask()
     if not origin_choice:
-        raise SystemExit
+        return
 
     dest_choice = questionary.select(
         "Destination station:",
         choices=[c for c in station_map if c != origin_choice],
     ).ask()
     if not dest_choice:
-        raise SystemExit
+        return
 
     origin_id = station_map[origin_choice]
     dest_id = station_map[dest_choice]
 
-    # ---------- Required Validated Inputs ----------
-    departure_date = ask_with_validation(
-        "Departure Date (YYYY-MM-DD):",
-        validator=is_valid_schedule_date,
-        error_msg="Invalid date",
-        attempts=3,
-    )
-    if departure_date is None:
-        return
+    # ================= DATE VALIDATION =================
+    while True:
+        departure_date = questionary.text(
+            "Departure Date (YYYY-MM-DD):"
+        ).ask()
 
-    arrival_date = ask_with_validation(
-        "Arrival Date (YYYY-MM-DD):",
-        validator=is_valid_schedule_date,
-        error_msg="Invalid date",
-        attempts=3,
-    )
-    if arrival_date is None:
-        return
+        if not is_valid_schedule_date(departure_date):
+            console.print("[red]Invalid date format[/red]")
+            continue
 
-    departure_time = ask_with_validation(
-        "Departure Time (HH:MM):",
-        validator=is_valid_time,
-        error_msg="Invalid time",
-        attempts=3,
-    )
-    if departure_time is None:
-        return
+        break
 
-    arrival_time = ask_with_validation(
-        "Arrival Time (HH:MM):",
-        validator=is_valid_time,
-        error_msg="Invalid time",
-        attempts=3,
-    )
-    if arrival_time is None:
-        return
+    while True:
+        arrival_date = questionary.text(
+            "Arrival Date (YYYY-MM-DD):"
+        ).ask()
 
-    fare_input = ask_with_validation(
-        "Fare (₹):",
-        validator=is_valid_fare,
-        error_msg="Fare must be positive number",
-        attempts=3,
-    )
-    if fare_input is None:
-        return
+        if not is_valid_schedule_date(arrival_date):
+            console.print("[red]Invalid date format[/red]")
+            continue
 
-    fare = float(fare_input)
+        dep_date_obj = datetime.strptime(departure_date, "%Y-%m-%d")
+        arr_date_obj = datetime.strptime(arrival_date, "%Y-%m-%d")
 
-    # ---------- Final logic check ----------
-    dep_dt = datetime.strptime(f"{departure_date} {departure_time}", "%Y-%m-%d %H:%M")
-    arr_dt = datetime.strptime(f"{arrival_date} {arrival_time}", "%Y-%m-%d %H:%M")
+        if arr_date_obj < dep_date_obj:
+            console.print("[red]Arrival date cannot be before departure date[/red]")
+            continue
 
-    if arr_dt <= dep_dt:
-        messages.show_error("Arrival must be after departure")
-        return
+        if arr_date_obj - dep_date_obj > timedelta(days=31):
+            console.print("[red]Journey cannot exceed 1 month[/red]")
+            continue
 
+        break
+
+    # ================= TIME VALIDATION =================
+    while True:
+        departure_time = questionary.text(
+            "Departure Time (HH:MM):"
+        ).ask()
+
+        if not is_valid_time(departure_time):
+            console.print("[red]Invalid time format[/red]")
+            continue
+
+        break
+
+    while True:
+        arrival_time = questionary.text(
+            "Arrival Time (HH:MM):"
+        ).ask()
+
+        if not is_valid_time(arrival_time):
+            console.print("[red]Invalid time format[/red]")
+            continue
+
+        dep_dt = datetime.strptime(
+            f"{departure_date} {departure_time}",
+            "%Y-%m-%d %H:%M",
+        )
+
+        arr_dt = datetime.strptime(
+            f"{arrival_date} {arrival_time}",
+            "%Y-%m-%d %H:%M",
+        )
+
+        if arr_dt <= dep_dt:
+            console.print("[red]Arrival must be after departure[/red]")
+            continue
+
+        duration = arr_dt - dep_dt
+
+        if duration < timedelta(minutes=30):
+            console.print("[red]Minimum journey duration is 30 minutes[/red]")
+            continue
+
+        if duration > timedelta(days=31):
+            console.print("[red]Journey cannot exceed 1 month[/red]")
+            continue
+
+        break
+
+    # ================= FARE VALIDATION =================
+    while True:
+        fare_input = questionary.text("Fare (₹):").ask()
+
+        try:
+            fare = float(fare_input)
+
+            if fare < 50:
+                console.print("[red]Minimum fare is ₹50[/red]")
+                continue
+
+            if fare > 400000:
+                console.print("[red]Maximum fare is ₹4,00,000[/red]")
+                continue
+
+            break
+
+        except:
+            console.print("[red]Fare must be a number[/red]")
+
+    # ================= CREATE =================
     try:
         sched_id = schedule_service.create_schedule(
             train_id,
@@ -254,30 +298,199 @@ def admin_schedule_new_train_jouney() -> None:
             fare,
         )
 
-        console.print(f"[bold green]Schedule created (id={sched_id})[/bold green]")
+        console.print(
+            f"[bold green]Schedule created successfully (id={sched_id})[/bold green]"
+        )
 
     except Exception as e:
-        console.print(f"[bold red] Error creating schedule: {e}[/bold red]")
+        console.print(f"[bold red]Error creating schedule: {e}[/bold red]")
 
 
 def train_details_update() -> None:
-    console.print("[cyan]Update Train Details[/cyan]")
+    console.print("[cyan]Update Train Journey Details[/cyan]")
 
-    train_id = ask_required(
-        "Enter Train number to update:",
-        validator=is_valid_train_number,
-        error_msg="Invalid train number",
-        attempts=3,
+    from datetime import datetime, timedelta
+    from services import schedule as schedule_service
+    from services import train as train_service
+    from services import station as station_service
+
+    rows = schedule_service.list_schedules()
+
+    if not rows:
+        console.print("[yellow]No train journeys available[/yellow]")
+        return
+
+    # ================= LOAD LOOKUPS =================
+    trains = train_service.list_trains()
+    train_lookup = {t["id"]: f"{t['train_number']} - {t['train_name']}" for t in trains}
+
+    stations = station_service.list_stations()
+    station_lookup = {s["id"]: f"{s['code']} - {s['name']}" for s in stations}
+
+    # ================= SELECT JOURNEY =================
+    journey_map = {}
+
+    for r in rows:
+        display = (
+            f"{r['id']} | "
+            f"{train_lookup.get(r['train_id'])} | "
+            f"{station_lookup.get(r['origin_station_id'])} → "
+            f"{station_lookup.get(r['destination_station_id'])} | "
+            f"{r['departure_date']} {r['departure_time']}"
+        )
+        journey_map[display] = r
+
+    choice = questionary.select(
+        "Select journey to update:",
+        choices=list(journey_map.keys()),
+    ).ask()
+
+    if not choice:
+        return
+
+    current = journey_map[choice]
+
+    schedule_id = current["id"]
+    train_id = current["train_id"]
+    origin_id = current["origin_station_id"]
+    dest_id = current["destination_station_id"]
+    departure_date = current["departure_date"]
+    arrival_date = current["arrival_date"]
+    departure_time = current["departure_time"]
+    arrival_time = current["arrival_time"]
+    fare = current["fare"]
+
+    console.print("\n[yellow]Press ENTER to keep existing value[/yellow]\n")
+
+    # ================= DATE UPDATE =================
+    while True:
+        new_dep_date = questionary.text(
+            f"Departure date (YYYY-MM-DD) [{departure_date}]:"
+        ).ask()
+
+        if not new_dep_date:
+            break
+
+        if not is_valid_schedule_date(new_dep_date):
+            console.print("[red]Invalid date format[/red]")
+            continue
+
+        departure_date = new_dep_date
+        break
+
+    while True:
+        new_arr_date = questionary.text(
+            f"Arrival date (YYYY-MM-DD) [{arrival_date}]:"
+        ).ask()
+
+        if not new_arr_date:
+            break
+
+        if not is_valid_schedule_date(new_arr_date):
+            console.print("[red]Invalid date format[/red]")
+            continue
+
+        arrival_date = new_arr_date
+        break
+
+    # ================= TIME UPDATE =================
+    while True:
+        new_dep_time = questionary.text(
+            f"Departure time (HH:MM) [{departure_time}]:"
+        ).ask()
+
+        if not new_dep_time:
+            break
+
+        if not is_valid_time(new_dep_time):
+            console.print("[red]Invalid time format[/red]")
+            continue
+
+        departure_time = new_dep_time
+        break
+
+    while True:
+        new_arr_time = questionary.text(
+            f"Arrival time (HH:MM) [{arrival_time}]:"
+        ).ask()
+
+        if not new_arr_time:
+            break
+
+        if not is_valid_time(new_arr_time):
+            console.print("[red]Invalid time format[/red]")
+            continue
+
+        arrival_time = new_arr_time
+        break
+
+    # ================= FINAL DATETIME CHECK =================
+    dep_dt = datetime.strptime(
+        f"{departure_date} {departure_time}",
+        "%Y-%m-%d %H:%M",
     )
 
-    new_name = ask_required("New Train Name:")
+    arr_dt = datetime.strptime(
+        f"{arrival_date} {arrival_time}",
+        "%Y-%m-%d %H:%M",
+    )
 
+    if arr_dt <= dep_dt:
+        console.print("[red]Arrival must be after departure[/red]")
+        return
+
+    duration = arr_dt - dep_dt
+
+    if duration < timedelta(minutes=30):
+        console.print("[red]Minimum journey duration is 30 minutes[/red]")
+        return
+
+    if duration > timedelta(days=31):
+        console.print("[red]Journey cannot exceed 1 month[/red]")
+        return
+
+    # ================= FARE UPDATE =================
+    while True:
+        new_fare = questionary.text(f"Fare [{fare}]:").ask()
+
+        if not new_fare:
+            break
+
+        try:
+            new_fare = float(new_fare)
+
+            if new_fare < 50:
+                console.print("[red]Minimum fare is ₹50[/red]")
+                continue
+
+            if new_fare > 400000:
+                console.print("[red]Maximum fare is ₹4,00,000[/red]")
+                continue
+
+            fare = new_fare
+            break
+
+        except:
+            console.print("[red]Fare must be a number[/red]")
+
+    # ================= UPDATE CALL =================
     try:
-        train_service.update_train(int(train_id), new_name)
-        console.print("[bold green]Train Updated Successfully[/bold green]")
+        schedule_service.update_schedule(
+            schedule_id,
+            train_id,
+            origin_id,
+            dest_id,
+            departure_date,
+            arrival_date,
+            departure_time,
+            arrival_time,
+            fare,
+        )
+
+        console.print("[bold green]Train Journey Updated Successfully[/bold green]")
 
     except Exception as e:
-        console.print(f"[bold red]Error updating train: {e}[/bold red]")
+        console.print(f"[bold red]Error updating journey: {e}[/bold red]")
 
 
 def station_details_update() -> None:

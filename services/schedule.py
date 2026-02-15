@@ -230,11 +230,32 @@ def get_schedules_by_train(train_id: int) -> list:
         connection.close_connection(conn)
 
 def delete_schedule(schedule_id: int) -> None:
-    """
-    Delete schedule entry.
-    """
+
     conn = connection.get_connection()
+
     try:
+        schedule = queries.get_schedule_by_id(conn, schedule_id)
+
+        if not schedule:
+            raise ValueError("Schedule does not exist")
+
+        train_id = schedule["train_id"]
+        origin_id = schedule["origin_station_id"]
+        dest_id = schedule["destination_station_id"]
+        departure_date = schedule["departure_date"]
+
+        if queries.booking_exists_for_schedule(
+            conn,
+            train_id,
+            origin_id,
+            dest_id,
+            departure_date,
+        ):
+            raise ValueError(
+                "Cannot delete schedule. Bookings exist for this journey."
+            )
+
         queries.delete_schedule(conn, schedule_id)
+
     finally:
         connection.close_connection(conn)

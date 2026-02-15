@@ -334,7 +334,10 @@ def get_all_schedules(conn):
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT * from schedules
+        SELECT s.*, t.train_number, t.train_name
+        FROM schedules s
+        JOIN trains t ON s.train_id = t.id
+        ORDER BY s.departure_date, s.departure_time
         """
     )
     return cur.fetchall()
@@ -671,3 +674,33 @@ def refund_payment_by_booking_id(conn, booking_id):
         (booking_id,),
     )
     conn.commit()
+
+
+def booking_exists_for_schedule(
+    conn,
+    train_id,
+    origin_station_id,
+    destination_station_id,
+    departure_date,
+):
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT 1
+        FROM bookings
+        WHERE train_id = ?
+          AND origin_station_id = ?
+          AND destination_station_id = ?
+          AND travel_date = ?
+        LIMIT 1
+        """,
+        (
+            train_id,
+            origin_station_id,
+            destination_station_id,
+            departure_date,
+        ),
+    )
+
+    return cur.fetchone() is not None

@@ -684,26 +684,32 @@ def delete_train_journey_by_admin() -> None:
         from services import schedule as schedule_service
         from services import train as train_service
         from services import station as station_service
+        from questionary import Choice
     except Exception as e:
-        console.print(f"[bold red] Import error: {e}[/bold red]")
+        console.print(f"[bold red]Import error: {e}[/bold red]")
         return
 
-    # ================= LIST SCHEDULES =================
+    # ================= FETCH SCHEDULES =================
     rows = schedule_service.list_schedules()
 
     if not rows:
         console.print("[yellow]No train journeys available[/yellow]")
         return
 
-    # ================= LOAD TRAIN DATA =================
+    # ================= LOAD LOOKUPS =================
     trains = train_service.list_trains()
-    train_lookup = {t["id"]: f"{t['train_number']} - {t['train_name']}" for t in trains}
+    train_lookup = {
+        t["id"]: f"{t['train_number']} - {t['train_name']}"
+        for t in trains
+    }
 
-    # ================= LOAD STATION DATA =================
     stations = station_service.list_stations()
-    station_lookup = {s["id"]: f"{s['code']} - {s['name']}" for s in stations}
+    station_lookup = {
+        s["id"]: f"{s['code']} - {s['name']}"
+        for s in stations
+    }
 
-    schedule_map = {}
+    # ================= BUILD CHOICES SAFELY =================
     choices = []
 
     for r in rows:
@@ -723,23 +729,21 @@ def delete_train_journey_by_admin() -> None:
             f"{r['arrival_date']} {r['arrival_time']} | ₹{r['fare']}"
         )
 
-        schedule_map[display] = r["id"]
-        choices.append(display)
+        # 🔥 Use Choice to avoid dictionary overwrite bugs
+        choices.append(Choice(title=display, value=r["id"]))
 
     # ================= SELECT =================
-    selected = questionary.select(
+    selected_id = questionary.select(
         "Select journey to delete:",
         choices=choices,
     ).ask()
 
-    if not selected:
+    if not selected_id:
         return
-
-    schedule_id = schedule_map[selected]
 
     # ================= CONFIRM =================
     confirm = questionary.confirm(
-        f"Are you sure you want to delete schedule ID {schedule_id}?",
+        f"Are you sure you want to delete schedule ID {selected_id}?",
         default=False,
     ).ask()
 
@@ -749,11 +753,11 @@ def delete_train_journey_by_admin() -> None:
 
     # ================= DELETE =================
     try:
-        schedule_service.delete_schedule(schedule_id)
-        console.print("[bold green] Train Journey deleted successfully[/bold green]")
+        schedule_service.delete_schedule(selected_id)
+        console.print("[bold green]Train Journey deleted successfully[/bold green]")
 
     except Exception as e:
-        console.print(f"[bold red] Error deleting train journey: {e}[/bold red]")
+        console.print(f"[bold red]Error deleting train journey: {e}[/bold red]")
 
 
 def admin_view_all_trains() -> None:

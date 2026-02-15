@@ -149,3 +149,24 @@ def is_valid_fare(f: str) -> bool:
         return float(f) > 0
     except Exception:
         return False
+
+
+
+def is_valid_name(value: str) -> bool:
+    """
+    Allows:
+    - Letters
+    - Numbers
+    - Spaces
+    Minimum length: 2
+    """
+
+    if not isinstance(value, str):
+        return False
+
+    value = value.strip()
+
+    if len(value) < 2:
+        return False
+
+    return bool(re.fullmatch(r"[A-Za-z0-9 ]+", value))

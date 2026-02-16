@@ -316,18 +316,6 @@ Fare         : ₹{fare}
         DUMMY_CARD = "1111222233334444"
         DUMMY_EXPIRY = "12/30"
         DUMMY_CVV = "123"
-        console.print(
-            Panel(
-                """
-[bold yellow]Demo Card Details:[/bold yellow]
-
-Card Number : 1111222233334444
-Expiry      : 12/30
-CVV         : 123
-                """,
-                style="yellow",
-            )
-        )
 
         while True:
 
